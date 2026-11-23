@@ -51,8 +51,11 @@ Tidak ada tabel riwayat terpisah.
 
 ## Notifikasi
 
-- `expo-notifications`, channel Android `jadwal-perawatan`, izin diminta saat
-  aplikasi dibuka.
+- `expo-notifications`, izin diminta saat aplikasi dibuka.
+- Channel kustom (`jadwal-perawatan`) tidak dapat dibuat di Expo Go SDK 58 —
+  `setNotificationChannelAsync` melempar `NullPointerException` — sehingga
+  notifikasi memakai channel bawaan Expo Go. Keputusan ini diambil setelah
+  pengujian di emulator; di development build channel kustom bisa diaktifkan.
 - Simpan/edit jadwal: batalkan notifikasi lama, jadwalkan `DAILY` pada jam
   tersebut, simpan `notificationId`.
 - Hapus jadwal/hewan: batalkan notifikasi terkait.

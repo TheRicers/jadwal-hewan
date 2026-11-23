@@ -1,7 +1,4 @@
 const Notifications = require('expo-notifications');
-const { Platform } = require('react-native');
-
-const CHANNEL_ID = 'jadwal-perawatan';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -19,15 +16,6 @@ function bodyFor(perawatan) {
 }
 
 async function setupNotifications() {
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: 'Jadwal Perawatan',
-      importance: Notifications.AndroidImportance.DEFAULT,
-      sound: 'default',
-      vibrationPattern: [0, 250, 250, 250],
-    });
-  }
-
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   if (!current.canAskAgain) return false;
@@ -50,7 +38,6 @@ async function scheduleDaily(schedule) {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
         hour,
         minute,
-        channelId: CHANNEL_ID,
       },
     });
   } catch (error) {
@@ -84,7 +71,6 @@ async function rescheduleMissing(schedules) {
 }
 
 module.exports = {
-  CHANNEL_ID,
   setupNotifications,
   scheduleDaily,
   cancelNotification,
