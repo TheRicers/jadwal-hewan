@@ -10,7 +10,7 @@ const {
   createSchedule, updateSchedule,
 } = require('../logic/schedules');
 const { newId } = require('../utils/id');
-const { isValidJam } = require('../utils/date');
+const { formatJam } = require('../utils/date');
 const { scheduleDaily, cancelNotification } = require('../notifications');
 const { colors, spacing, radius } = require('../theme');
 
@@ -85,8 +85,10 @@ function JadwalFormScreen({ navigation, route }) {
       return;
     }
 
-    const jam = jamDariDate(jamDate);
-    if (!isValidJam(jam)) {
+    let jam;
+    try {
+      jam = formatJam(jamDariDate(jamDate));
+    } catch {
       Alert.alert('Jam tidak valid', 'Pilih jam dengan format HH:mm, misalnya 07:00.');
       return;
     }
@@ -97,9 +99,7 @@ function JadwalFormScreen({ navigation, route }) {
 
       if (isEdit) {
         const current = schedules.find((item) => item.id === scheduleId);
-        if (current?.notificationId) {
-          await cancelNotification(current.notificationId);
-        }
+        const oldNotificationId = current?.notificationId || null;
         let next = updateSchedule(schedules, scheduleId, {
           petId,
           perawatan,
@@ -109,11 +109,22 @@ function JadwalFormScreen({ navigation, route }) {
         const updated = next.find((item) => item.id === scheduleId);
         const notificationId = updated ? await scheduleDaily(updated) : null;
         next = updateSchedule(next, scheduleId, { notificationId });
-        await saveSchedules(next);
+        try {
+          await saveSchedules(next);
+        } catch (error) {
+          await cancelNotification(notificationId);
+          throw error;
+        }
+        await cancelNotification(oldNotificationId);
       } else {
         const schedule = createSchedule({ petId, perawatan, jam }, newId());
         const notificationId = await scheduleDaily(schedule);
-        await saveSchedules([...schedules, { ...schedule, notificationId }]);
+        try {
+          await saveSchedules([...schedules, { ...schedule, notificationId }]);
+        } catch (error) {
+          await cancelNotification(notificationId);
+          throw error;
+        }
       }
 
       navigation.goBack();

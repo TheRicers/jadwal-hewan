@@ -1,7 +1,7 @@
 const React = require('react');
 const { useCallback, useEffect, useState } = React;
 const {
-  Alert, Pressable, SectionList, StyleSheet, Text, View,
+  Alert, AppState, Pressable, SectionList, StyleSheet, Text, View,
 } = require('react-native');
 const { useFocusEffect } = require('@react-navigation/native');
 
@@ -34,11 +34,13 @@ function JadwalListScreen({ navigation }) {
   const [pets, setPets] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const { granted } = useNotificationStatus();
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      setNow(new Date());
       loadAll()
         .then((data) => {
           if (!active) return;
@@ -71,8 +73,24 @@ function JadwalListScreen({ navigation }) {
     });
   }, [navigation]);
 
-  const today = todayKey();
-  const petById = new Map(pets.map((pet) => [pet.id, pet]));  const sections = groupByJam(schedules).map((group) => ({
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow((previous) => (
+        todayKey(previous) === todayKey() ? previous : new Date()
+      ));
+    }, 60 * 1000);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setNow(new Date());
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, []);
+
+  const today = todayKey(now);
+  const petById = new Map(pets.map((pet) => [pet.id, pet]));
+  const sections = groupByJam(schedules).map((group) => ({
     title: group.jam,
     data: group.items,
   }));
@@ -156,7 +174,7 @@ function JadwalListScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {!granted ? (
+      {granted === false ? (
         <View style={styles.banner}>
           <Text style={styles.bannerText}>
             Notifikasi nonaktif. Jadwal tetap tersimpan, tetapi pengingat tidak akan berbunyi.
@@ -165,7 +183,7 @@ function JadwalListScreen({ navigation }) {
       ) : null}
 
       <View style={styles.header}>
-        <Text style={styles.date}>{tanggalPanjang()}</Text>
+        <Text style={styles.date}>{tanggalPanjang(now)}</Text>
         <Text style={styles.summary}>
           {schedules.length === 0
             ? 'Belum ada jadwal'

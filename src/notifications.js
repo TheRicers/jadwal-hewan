@@ -64,6 +64,10 @@ async function rescheduleMissing(schedules) {
       continue;
     }
     const notificationId = await scheduleDaily(schedule);
+    if (!notificationId) {
+      next.push(schedule);
+      continue;
+    }
     next.push({ ...schedule, notificationId });
     changed = true;
   }

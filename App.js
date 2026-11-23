@@ -16,7 +16,7 @@ const { colors } = require('./src/theme');
 const Stack = createNativeStackNavigator();
 
 function App() {
-  const [notificationGranted, setNotificationGranted] = useState(true);
+  const [notificationGranted, setNotificationGranted] = useState(null);
 
   useEffect(() => {
     let active = true;

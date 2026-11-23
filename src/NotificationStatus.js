@@ -1,7 +1,7 @@
 const React = require('react');
 const { createContext, useContext } = React;
 
-const NotificationStatusContext = createContext({ granted: true });
+const NotificationStatusContext = createContext({ granted: null });
 
 function useNotificationStatus() {
   return useContext(NotificationStatusContext);
