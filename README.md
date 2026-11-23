@@ -61,7 +61,7 @@ src/utils/                    tanggal dan ID
 - Di Expo Go SDK 58, pembuatan channel notifikasi kustom gagal
   (`setNotificationChannelAsync` melempar NullPointerException), sehingga
   pengingat memakai channel bawaan Expo Go. Di development build, channel
-  kustom dapat diaktifkan kembali.
+  kustom dapat ditambahkan kembali lewat kode/config plugin.
 - Push notification dari server tidak didukung Expo Go; aplikasi ini hanya
   memakai notifikasi lokal sehingga tetap berjalan offline.
 - Expo Go tidak menghasilkan file APK. Untuk itu perlu development build/EAS
