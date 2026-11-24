@@ -10,7 +10,7 @@ const JadwalFormScreen = require('./src/screens/JadwalFormScreen');
 const HewanScreen = require('./src/screens/HewanScreen');
 const { NotificationStatusContext } = require('./src/NotificationStatus');
 const { setupNotifications, rescheduleMissing } = require('./src/notifications');
-const { loadSchedules, saveSchedules } = require('./src/storage/db');
+const { loadSchedules, saveSchedules, loadPerawatanKustom } = require('./src/storage/db');
 const { colors } = require('./src/theme');
 
 const Stack = createNativeStackNavigator();
@@ -33,8 +33,11 @@ function App() {
       if (!granted) return;
 
       try {
-        const schedules = await loadSchedules();
-        const result = await rescheduleMissing(schedules);
+        const [schedules, perawatanKustom] = await Promise.all([
+          loadSchedules(),
+          loadPerawatanKustom(),
+        ]);
+        const result = await rescheduleMissing(schedules, perawatanKustom);
         if (result.changed) {
           await saveSchedules(result.schedules);
         }

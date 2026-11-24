@@ -2,6 +2,7 @@ const AsyncStorage = require('@react-native-async-storage/async-storage').defaul
 
 const PETS_KEY = '@pets';
 const SCHEDULES_KEY = '@schedules';
+const PERAWATAN_KUSTOM_KEY = '@perawatanKustom';
 
 async function readJson(key) {
   try {
@@ -35,17 +36,32 @@ async function saveSchedules(schedules) {
   return writeJson(SCHEDULES_KEY, schedules);
 }
 
+async function loadPerawatanKustom() {
+  return readJson(PERAWATAN_KUSTOM_KEY);
+}
+
+async function savePerawatanKustom(perawatanKustom) {
+  return writeJson(PERAWATAN_KUSTOM_KEY, perawatanKustom);
+}
+
 async function loadAll() {
-  const [pets, schedules] = await Promise.all([loadPets(), loadSchedules()]);
-  return { pets, schedules };
+  const [pets, schedules, perawatanKustom] = await Promise.all([
+    loadPets(),
+    loadSchedules(),
+    loadPerawatanKustom(),
+  ]);
+  return { pets, schedules, perawatanKustom };
 }
 
 module.exports = {
   PETS_KEY,
   SCHEDULES_KEY,
+  PERAWATAN_KUSTOM_KEY,
   loadPets,
   savePets,
   loadSchedules,
   saveSchedules,
+  loadPerawatanKustom,
+  savePerawatanKustom,
   loadAll,
 };
