@@ -1,7 +1,7 @@
 const React = require('react');
 const { useEffect, useState } = React;
 const {
-  KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View,
+  KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } = require('react-native');
 
 const { colors, spacing, radius } = require('../theme');
@@ -99,6 +99,70 @@ function NamaPerawatanModal({
   );
 }
 
+function KelolaPerawatanModal({
+  visible, perawatanKustom = [], onClose, onUbah, onHapus,
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Kelola Jenis Perawatan</Text>
+
+          {perawatanKustom.length === 0 ? (
+            <Text style={styles.kelolaEmpty}>
+              Belum ada jenis perawatan kustom. Tambahkan lewat chip + Baru.
+            </Text>
+          ) : (
+            <ScrollView style={styles.kelolaList}>
+              {perawatanKustom.map((item) => (
+                <View key={item.id} style={styles.kelolaRow}>
+                  <Text style={styles.kelolaNama} numberOfLines={1}>
+                    🐾 {item.nama}
+                  </Text>
+                  <Pressable
+                    onPress={() => onUbah(item)}
+                    hitSlop={8}
+                    style={styles.kelolaAction}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ubah ${item.nama}`}
+                  >
+                    <Text style={styles.kelolaActionText}>Ubah</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => onHapus(item)}
+                    hitSlop={8}
+                    style={[styles.kelolaAction, styles.kelolaActionDanger]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Hapus ${item.nama}`}
+                  >
+                    <Text style={[styles.kelolaActionText, styles.kelolaActionDangerText]}>
+                      Hapus
+                    </Text>
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
+          <Pressable
+            style={styles.kelolaTutup}
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Tutup kelola jenis perawatan"
+          >
+            <Text style={styles.kelolaTutupText}>Tutup</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
@@ -141,6 +205,33 @@ const styles = StyleSheet.create({
   modalSave: { backgroundColor: colors.primary },
   modalSaveDisabled: { opacity: 0.6 },
   modalSaveText: { color: '#FFFFFF', fontWeight: '700' },
+  kelolaList: { marginTop: spacing.md, maxHeight: 280 },
+  kelolaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  kelolaNama: { flex: 1, color: colors.text, fontWeight: '600' },
+  kelolaAction: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  kelolaActionText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
+  kelolaActionDanger: { marginLeft: spacing.xs },
+  kelolaActionDangerText: { color: colors.danger },
+  kelolaEmpty: {
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
+    color: colors.muted,
+    lineHeight: 20,
+  },
+  kelolaTutup: {
+    marginTop: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  kelolaTutupText: { color: colors.text, fontWeight: '600' },
 });
 
-module.exports = { NamaPerawatanModal };
+module.exports = { NamaPerawatanModal, KelolaPerawatanModal };

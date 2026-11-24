@@ -11,8 +11,9 @@ const {
 } = require('../logic/schedules');
 const {
   BUILTIN_PERAWATAN, customPerawatanValue, createPerawatanKustom, validateNamaPerawatan,
+  renamePerawatanKustom, removePerawatanKustom, schedulesUsingPerawatan, detachPerawatanKustom,
 } = require('../logic/perawatan');
-const { NamaPerawatanModal } = require('../components/PerawatanModal');
+const { NamaPerawatanModal, KelolaPerawatanModal } = require('../components/PerawatanModal');
 const { newId } = require('../utils/id');
 const { formatJam } = require('../utils/date');
 const { scheduleDaily, cancelNotification } = require('../notifications');
@@ -42,6 +43,7 @@ function JadwalFormScreen({ navigation, route }) {
   const [perawatan, setPerawatan] = useState('makan');
   const [perawatanKustom, setPerawatanKustom] = useState([]);
   const [namaModal, setNamaModal] = useState(null);
+  const [kelolaVisible, setKelolaVisible] = useState(false);
   const [jamDate, setJamDate] = useState(() => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + 30, 0, 0);
@@ -141,8 +143,43 @@ function JadwalFormScreen({ navigation, route }) {
   }
 
   async function handleNamaSubmit(nama) {
-    const error = validateNamaPerawatan(nama, perawatanKustom);
+    const mode = namaModal?.mode || 'tambah';
+    const target = namaModal?.target || null;
+    const error = validateNamaPerawatan(nama, perawatanKustom, target?.id || null);
     if (error) return error;
+
+    if (mode === 'ubah' && target) {
+      const nextTypes = renamePerawatanKustom(perawatanKustom, target.id, nama);
+      try {
+        await savePerawatanKustom(nextTypes);
+      } catch (err) {
+        console.warn('Gagal menyimpan jenis perawatan', err);
+        return 'Gagal menyimpan jenis perawatan.';
+      }
+
+      setPerawatanKustom(nextTypes);
+      setNamaModal(null);
+
+      const value = customPerawatanValue(target.id);
+      try {
+        const schedules = await loadSchedules();
+        const affected = schedulesUsingPerawatan(schedules, value);
+        let next = schedules;
+        for (const schedule of affected) {
+          await cancelNotification(schedule.notificationId);
+          const notificationId = await scheduleDaily(schedule, nextTypes);
+          next = updateSchedule(next, schedule.id, { notificationId });
+        }
+        if (affected.length > 0) await saveSchedules(next);
+      } catch (err) {
+        console.warn('Gagal memperbarui pengingat jenis perawatan', err);
+        Alert.alert(
+          'Jenis perawatan tersimpan',
+          'Gagal memperbarui pengingat jadwal yang memakai jenis ini.'
+        );
+      }
+      return null;
+    }
 
     const created = createPerawatanKustom(nama, newId());
     const next = [...perawatanKustom, created];
@@ -157,6 +194,55 @@ function JadwalFormScreen({ navigation, route }) {
     setPerawatan(customPerawatanValue(created.id));
     setNamaModal(null);
     return null;
+  }
+
+  function handleUbahPerawatan(item) {
+    setKelolaVisible(false);
+    setNamaModal({ mode: 'ubah', target: item });
+  }
+
+  async function handleHapusPerawatan(item) {
+    const value = customPerawatanValue(item.id);
+    const schedules = await loadSchedules();
+    const affected = schedulesUsingPerawatan(schedules, value);
+    const pesan = affected.length > 0
+      ? `${affected.length} jadwal yang memakai jenis ini akan diubah menjadi Lainnya.`
+      : `Jenis ${item.nama} akan dihapus.`;
+
+    Alert.alert('Hapus jenis perawatan?', pesan, [
+      { text: 'Batal', style: 'cancel' },
+      {
+        text: 'Hapus',
+        style: 'destructive',
+        onPress: async () => {
+          const nextTypes = removePerawatanKustom(perawatanKustom, item.id);
+          const detached = detachPerawatanKustom(schedules, value);
+          let next = detached;
+          for (const schedule of affected) {
+            const detachedSchedule = detached.find((entry) => entry.id === schedule.id);
+            if (!detachedSchedule) continue;
+            await cancelNotification(schedule.notificationId);
+            const notificationId = await scheduleDaily(detachedSchedule, nextTypes);
+            next = updateSchedule(next, schedule.id, { notificationId });
+          }
+
+          try {
+            await savePerawatanKustom(nextTypes);
+            await saveSchedules(next);
+          } catch (error) {
+            console.warn('Gagal menghapus jenis perawatan', error);
+            Alert.alert(
+              'Gagal menghapus',
+              'Terjadi kesalahan saat menghapus jenis perawatan.'
+            );
+            return;
+          }
+
+          setPerawatanKustom(nextTypes);
+          setPerawatan((current) => (current === value ? 'makan' : current));
+        },
+      },
+    ]);
   }
 
   return (
@@ -196,7 +282,17 @@ function JadwalFormScreen({ navigation, route }) {
           </ScrollView>
         )}
 
-        <Text style={styles.label}>Jenis perawatan</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.labelInline}>Jenis perawatan</Text>
+          <Pressable
+            onPress={() => setKelolaVisible(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Kelola jenis perawatan"
+          >
+            <Text style={styles.kelolaLink}>Kelola</Text>
+          </Pressable>
+        </View>
         <View style={styles.perawatanRow}>
           {BUILTIN_PERAWATAN.map((item) => {
             const selected = item.value === perawatan;
@@ -292,9 +388,17 @@ function JadwalFormScreen({ navigation, route }) {
       <NamaPerawatanModal
         visible={Boolean(namaModal)}
         mode={namaModal?.mode || 'tambah'}
-        initialNama=""
+        initialNama={namaModal?.target?.nama || ''}
         onClose={() => setNamaModal(null)}
         onSubmit={handleNamaSubmit}
+      />
+
+      <KelolaPerawatanModal
+        visible={kelolaVisible}
+        perawatanKustom={perawatanKustom}
+        onClose={() => setKelolaVisible(false)}
+        onUbah={handleUbahPerawatan}
+        onHapus={handleHapusPerawatan}
       />
     </>
   );
@@ -310,6 +414,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  labelInline: { fontSize: 14, fontWeight: '700', color: colors.text },
+  kelolaLink: { color: colors.primary, fontWeight: '700', fontSize: 13 },
   chipRow: { marginHorizontal: -spacing.xs, paddingVertical: 2 },
   chip: {
     minWidth: 96,
