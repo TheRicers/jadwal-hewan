@@ -6,18 +6,17 @@ const {
 
 const { colors, spacing, radius } = require('../theme');
 
-function NamaPerawatanModal({
-  visible, mode = 'tambah', initialNama = '', onClose, onSubmit,
+function NamaPerawatanForm({
+  title, initialNama = '', onSubmit, onCancel, onSubmittingChange,
 }) {
   const [nama, setNama] = useState(initialNama);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    setNama(initialNama || '');
-    setError(null);
-    setSubmitting(false);
-  }, [visible, initialNama]);
+  function setBusy(value) {
+    setSubmitting(value);
+    if (onSubmittingChange) onSubmittingChange(value);
+  }
 
   function handleChange(value) {
     setNama(value);
@@ -26,7 +25,7 @@ function NamaPerawatanModal({
 
   async function handleSubmit() {
     if (submitting) return;
-    setSubmitting(true);
+    setBusy(true);
     setError(null);
     try {
       const message = await onSubmit(nama);
@@ -35,12 +34,64 @@ function NamaPerawatanModal({
       console.warn('Gagal menyimpan jenis perawatan', err);
       setError('Gagal menyimpan jenis perawatan.');
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   }
 
-  function handleClose() {
+  function handleCancel() {
     if (submitting) return;
+    onCancel();
+  }
+
+  return (
+    <>
+      <Text style={styles.modalTitle}>{title}</Text>
+
+      <Text style={styles.inputLabel}>Nama</Text>
+      <TextInput
+        value={nama}
+        onChangeText={handleChange}
+        placeholder="Misalnya Grooming"
+        placeholderTextColor={colors.muted}
+        style={styles.input}
+        autoFocus
+        maxLength={30}
+        returnKeyType="done"
+        onSubmitEditing={handleSubmit}
+      />
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+
+      <View style={styles.modalActions}>
+        <Pressable
+          style={[styles.modalButton, styles.modalCancel, submitting && styles.modalSaveDisabled]}
+          onPress={handleCancel}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel="Batal"
+        >
+          <Text style={styles.modalCancelText}>Batal</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.modalButton, styles.modalSave, submitting && styles.modalSaveDisabled]}
+          onPress={handleSubmit}
+          disabled={submitting}
+          accessibilityRole="button"
+          accessibilityLabel="Simpan jenis perawatan"
+        >
+          <Text style={styles.modalSaveText}>{submitting ? 'Menyimpan…' : 'Simpan'}</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
+function NamaPerawatanModal({
+  visible, mode = 'tambah', initialNama = '', onClose, onSubmit,
+}) {
+  const [busy, setBusy] = useState(false);
+
+  function handleClose() {
+    if (busy) return;
     onClose();
   }
 
@@ -56,43 +107,15 @@ function NamaPerawatanModal({
         style={styles.modalOverlay}
       >
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>
-            {mode === 'ubah' ? 'Ubah Jenis Perawatan' : 'Jenis Perawatan Baru'}
-          </Text>
-
-          <Text style={styles.inputLabel}>Nama</Text>
-          <TextInput
-            value={nama}
-            onChangeText={handleChange}
-            placeholder="Misalnya Grooming"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            autoFocus
-            maxLength={30}
-            returnKeyType="done"
-            onSubmitEditing={handleSubmit}
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <View style={styles.modalActions}>
-            <Pressable
-              style={[styles.modalButton, styles.modalCancel]}
-              onPress={handleClose}
-              accessibilityRole="button"
-              accessibilityLabel="Batal"
-            >
-              <Text style={styles.modalCancelText}>Batal</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modalButton, styles.modalSave, submitting && styles.modalSaveDisabled]}
-              onPress={handleSubmit}
-              disabled={submitting}
-              accessibilityRole="button"
-              accessibilityLabel="Simpan jenis perawatan"
-            >
-              <Text style={styles.modalSaveText}>{submitting ? 'Menyimpan…' : 'Simpan'}</Text>
-            </Pressable>
-          </View>
+          {visible ? (
+            <NamaPerawatanForm
+              title={mode === 'ubah' ? 'Ubah Jenis Perawatan' : 'Jenis Perawatan Baru'}
+              initialNama={initialNama}
+              onSubmit={onSubmit}
+              onCancel={handleClose}
+              onSubmittingChange={setBusy}
+            />
+          ) : null}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -100,65 +123,115 @@ function NamaPerawatanModal({
 }
 
 function KelolaPerawatanModal({
-  visible, perawatanKustom = [], onClose, onUbah, onHapus,
+  visible, perawatanKustom = [], busy = false, onClose, onUbah, onHapus,
 }) {
+  const [editing, setEditing] = useState(null);
+  const [formBusy, setFormBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setEditing(null);
+      setFormBusy(false);
+    }
+  }, [visible]);
+
+  const blocked = busy || formBusy;
+
+  function handleClose() {
+    if (blocked) return;
+    if (editing) {
+      setEditing(null);
+      return;
+    }
+    onClose();
+  }
+
+  async function handleRename(nama) {
+    if (!editing) return null;
+    const message = await onUbah(editing, nama);
+    if (!message) setEditing(null);
+    return message;
+  }
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={handleClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.modalOverlay}
+      >
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Kelola Jenis Perawatan</Text>
-
-          {perawatanKustom.length === 0 ? (
-            <Text style={styles.kelolaEmpty}>
-              Belum ada jenis perawatan kustom. Tambahkan lewat chip + Baru.
-            </Text>
+          {editing ? (
+            <NamaPerawatanForm
+              title="Ubah Jenis Perawatan"
+              initialNama={editing.nama}
+              onSubmit={handleRename}
+              onCancel={handleClose}
+              onSubmittingChange={setFormBusy}
+            />
           ) : (
-            <ScrollView style={styles.kelolaList}>
-              {perawatanKustom.map((item) => (
-                <View key={item.id} style={styles.kelolaRow}>
-                  <Text style={styles.kelolaNama} numberOfLines={1}>
-                    🐾 {item.nama}
-                  </Text>
-                  <Pressable
-                    onPress={() => onUbah(item)}
-                    hitSlop={8}
-                    style={styles.kelolaAction}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Ubah ${item.nama}`}
-                  >
-                    <Text style={styles.kelolaActionText}>Ubah</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => onHapus(item)}
-                    hitSlop={8}
-                    style={[styles.kelolaAction, styles.kelolaActionDanger]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Hapus ${item.nama}`}
-                  >
-                    <Text style={[styles.kelolaActionText, styles.kelolaActionDangerText]}>
-                      Hapus
-                    </Text>
-                  </Pressable>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+            <>
+              <Text style={styles.modalTitle}>Kelola Jenis Perawatan</Text>
 
-          <Pressable
-            style={styles.kelolaTutup}
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Tutup kelola jenis perawatan"
-          >
-            <Text style={styles.kelolaTutupText}>Tutup</Text>
-          </Pressable>
+              {perawatanKustom.length === 0 ? (
+                <Text style={styles.kelolaEmpty}>
+                  Belum ada jenis perawatan kustom. Tambahkan lewat chip + Baru.
+                </Text>
+              ) : (
+                <ScrollView style={styles.kelolaList}>
+                  {perawatanKustom.map((item) => (
+                    <View key={item.id} style={styles.kelolaRow}>
+                      <Text style={styles.kelolaNama} numberOfLines={1}>
+                        🐾 {item.nama}
+                      </Text>
+                      <Pressable
+                        onPress={() => setEditing(item)}
+                        disabled={blocked}
+                        hitSlop={8}
+                        style={[styles.kelolaAction, blocked && styles.kelolaActionDisabled]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Ubah ${item.nama}`}
+                      >
+                        <Text style={styles.kelolaActionText}>Ubah</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => onHapus(item)}
+                        disabled={blocked}
+                        hitSlop={8}
+                        style={[
+                          styles.kelolaAction,
+                          styles.kelolaActionDanger,
+                          blocked && styles.kelolaActionDisabled,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Hapus ${item.nama}`}
+                      >
+                        <Text style={[styles.kelolaActionText, styles.kelolaActionDangerText]}>
+                          Hapus
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              <Pressable
+                style={[styles.kelolaTutup, blocked && styles.kelolaTutupDisabled]}
+                onPress={handleClose}
+                disabled={blocked}
+                accessibilityRole="button"
+                accessibilityLabel="Tutup kelola jenis perawatan"
+              >
+                <Text style={styles.kelolaTutupText}>Tutup</Text>
+              </Pressable>
+            </>
+          )}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -215,6 +288,7 @@ const styles = StyleSheet.create({
   },
   kelolaNama: { flex: 1, color: colors.text, fontWeight: '600' },
   kelolaAction: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  kelolaActionDisabled: { opacity: 0.5 },
   kelolaActionText: { color: colors.primary, fontWeight: '600', fontSize: 13 },
   kelolaActionDanger: { marginLeft: spacing.xs },
   kelolaActionDangerText: { color: colors.danger },
@@ -231,6 +305,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     alignItems: 'center',
   },
+  kelolaTutupDisabled: { opacity: 0.5 },
   kelolaTutupText: { color: colors.text, fontWeight: '600' },
 });
 

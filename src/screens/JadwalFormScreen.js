@@ -42,8 +42,9 @@ function JadwalFormScreen({ navigation, route }) {
   const [petId, setPetId] = useState(null);
   const [perawatan, setPerawatan] = useState('makan');
   const [perawatanKustom, setPerawatanKustom] = useState([]);
-  const [namaModal, setNamaModal] = useState(null);
+  const [namaModalVisible, setNamaModalVisible] = useState(false);
   const [kelolaVisible, setKelolaVisible] = useState(false);
+  const [busyPerawatan, setBusyPerawatan] = useState(false);
   const [jamDate, setJamDate] = useState(() => {
     const now = new Date();
     now.setMinutes(now.getMinutes() + 30, 0, 0);
@@ -143,62 +144,57 @@ function JadwalFormScreen({ navigation, route }) {
   }
 
   async function handleNamaSubmit(nama) {
-    const mode = namaModal?.mode || 'tambah';
-    const target = namaModal?.target || null;
-    const error = validateNamaPerawatan(nama, perawatanKustom, target?.id || null);
+    const error = validateNamaPerawatan(nama, perawatanKustom);
     if (error) return error;
-
-    if (mode === 'ubah' && target) {
-      const nextTypes = renamePerawatanKustom(perawatanKustom, target.id, nama);
-      try {
-        await savePerawatanKustom(nextTypes);
-      } catch (err) {
-        console.warn('Gagal menyimpan jenis perawatan', err);
-        return 'Gagal menyimpan jenis perawatan.';
-      }
-
-      setPerawatanKustom(nextTypes);
-      setNamaModal(null);
-
-      const value = customPerawatanValue(target.id);
-      try {
-        const schedules = await loadSchedules();
-        const affected = schedulesUsingPerawatan(schedules, value);
-        let next = schedules;
-        for (const schedule of affected) {
-          await cancelNotification(schedule.notificationId);
-          const notificationId = await scheduleDaily(schedule, nextTypes);
-          next = updateSchedule(next, schedule.id, { notificationId });
-        }
-        if (affected.length > 0) await saveSchedules(next);
-      } catch (err) {
-        console.warn('Gagal memperbarui pengingat jenis perawatan', err);
-        Alert.alert(
-          'Jenis perawatan tersimpan',
-          'Gagal memperbarui pengingat jadwal yang memakai jenis ini.'
-        );
-      }
-      return null;
-    }
 
     const created = createPerawatanKustom(nama, newId());
     const next = [...perawatanKustom, created];
     try {
       await savePerawatanKustom(next);
-    } catch (error) {
-      console.warn('Gagal menyimpan jenis perawatan', error);
+    } catch (err) {
+      console.warn('Gagal menyimpan jenis perawatan', err);
       return 'Gagal menyimpan jenis perawatan.';
     }
 
     setPerawatanKustom(next);
     setPerawatan(customPerawatanValue(created.id));
-    setNamaModal(null);
+    setNamaModalVisible(false);
     return null;
   }
 
-  function handleUbahPerawatan(item) {
-    setKelolaVisible(false);
-    setNamaModal({ mode: 'ubah', target: item });
+  async function handleUbahPerawatan(item, nama) {
+    const error = validateNamaPerawatan(nama, perawatanKustom, item.id);
+    if (error) return error;
+
+    const nextTypes = renamePerawatanKustom(perawatanKustom, item.id, nama);
+    try {
+      await savePerawatanKustom(nextTypes);
+    } catch (err) {
+      console.warn('Gagal menyimpan jenis perawatan', err);
+      return 'Gagal menyimpan jenis perawatan.';
+    }
+
+    setPerawatanKustom(nextTypes);
+
+    const value = customPerawatanValue(item.id);
+    try {
+      const schedules = await loadSchedules();
+      const affected = schedulesUsingPerawatan(schedules, value);
+      let next = schedules;
+      for (const schedule of affected) {
+        await cancelNotification(schedule.notificationId);
+        const notificationId = await scheduleDaily(schedule, nextTypes);
+        next = updateSchedule(next, schedule.id, { notificationId });
+      }
+      if (affected.length > 0) await saveSchedules(next);
+    } catch (err) {
+      console.warn('Gagal memperbarui pengingat jenis perawatan', err);
+      Alert.alert(
+        'Jenis perawatan tersimpan',
+        'Gagal memperbarui pengingat jadwal yang memakai jenis ini.'
+      );
+    }
+    return null;
   }
 
   async function handleHapusPerawatan(item) {
@@ -215,37 +211,45 @@ function JadwalFormScreen({ navigation, route }) {
         text: 'Hapus',
         style: 'destructive',
         onPress: async () => {
-          const nextTypes = removePerawatanKustom(perawatanKustom, item.id);
-          const detached = detachPerawatanKustom(schedules, value);
-          let next = detached;
-          for (const schedule of affected) {
-            const detachedSchedule = detached.find((entry) => entry.id === schedule.id);
-            if (!detachedSchedule) continue;
-            await cancelNotification(schedule.notificationId);
-            const notificationId = await scheduleDaily(detachedSchedule, nextTypes);
-            next = updateSchedule(next, schedule.id, { notificationId });
-          }
-
+          setBusyPerawatan(true);
           try {
-            if (affected.length > 0) {
-              await saveSchedules(next);
+            const nextTypes = removePerawatanKustom(perawatanKustom, item.id);
+            const detached = detachPerawatanKustom(schedules, value);
+            let next = detached;
+            for (const schedule of affected) {
+              const detachedSchedule = detached.find((entry) => entry.id === schedule.id);
+              if (!detachedSchedule) continue;
+              await cancelNotification(schedule.notificationId);
+              const notificationId = await scheduleDaily(detachedSchedule, nextTypes);
+              next = updateSchedule(next, schedule.id, { notificationId });
             }
-            await savePerawatanKustom(nextTypes);
-          } catch (error) {
-            console.warn('Gagal menghapus jenis perawatan', error);
-            Alert.alert(
-              'Gagal menghapus',
-              'Terjadi kesalahan saat menghapus jenis perawatan.'
-            );
-            return;
-          }
 
-          setPerawatanKustom(nextTypes);
-          setPerawatan((current) => (current === value ? 'makan' : current));
+            try {
+              if (affected.length > 0) {
+                await saveSchedules(next);
+              }
+              await savePerawatanKustom(nextTypes);
+            } catch (error) {
+              console.warn('Gagal menghapus jenis perawatan', error);
+              Alert.alert(
+                'Gagal menghapus',
+                'Terjadi kesalahan saat menghapus jenis perawatan.'
+              );
+              return;
+            }
+
+            setPerawatanKustom(nextTypes);
+            setPerawatan((current) => (current === value ? 'makan' : current));
+          } finally {
+            setBusyPerawatan(false);
+          }
         },
       },
     ]);
   }
+
+  const perawatanDikenal = BUILTIN_PERAWATAN.some((item) => item.value === perawatan)
+    || perawatanKustom.some((item) => customPerawatanValue(item.id) === perawatan);
 
   return (
     <>
@@ -331,8 +335,18 @@ function JadwalFormScreen({ navigation, route }) {
               </Pressable>
             );
           })}
+          {!perawatanDikenal ? (
+            <View
+              style={[styles.perawatan, styles.perawatanSelected]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: true }}
+            >
+              <Text style={styles.perawatanIcon}>🐾</Text>
+              <Text style={[styles.perawatanText, styles.chipTextSelected]}>Lainnya</Text>
+            </View>
+          ) : null}
           <Pressable
-            onPress={() => setNamaModal({ mode: 'tambah' })}
+            onPress={() => setNamaModalVisible(true)}
             style={[styles.perawatan, styles.perawatanBaru]}
             accessibilityRole="button"
             accessibilityLabel="Tambah jenis perawatan baru"
@@ -341,6 +355,12 @@ function JadwalFormScreen({ navigation, route }) {
             <Text style={[styles.perawatanText, styles.perawatanBaruText]}>Baru</Text>
           </Pressable>
         </View>
+
+        {!perawatanDikenal ? (
+          <Text style={styles.hint}>
+            {'Jenis ini tersimpan sebagai "Lainnya" dari versi sebelumnya. Pilih jenis di atas untuk menggantinya.'}
+          </Text>
+        ) : null}
 
         <Text style={styles.label}>Jam pengingat</Text>
         <Pressable
@@ -375,9 +395,9 @@ function JadwalFormScreen({ navigation, route }) {
         </Text>
 
         <Pressable
-          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          style={[styles.saveButton, (saving || busyPerawatan) && styles.saveButtonDisabled]}
           onPress={handleSave}
-          disabled={saving || pets.length === 0}
+          disabled={saving || busyPerawatan || pets.length === 0}
           accessibilityRole="button"
           accessibilityLabel="Simpan jadwal"
         >
@@ -388,16 +408,17 @@ function JadwalFormScreen({ navigation, route }) {
       </ScrollView>
 
       <NamaPerawatanModal
-        visible={Boolean(namaModal)}
-        mode={namaModal?.mode || 'tambah'}
-        initialNama={namaModal?.target?.nama || ''}
-        onClose={() => setNamaModal(null)}
+        visible={namaModalVisible}
+        mode="tambah"
+        initialNama=""
+        onClose={() => setNamaModalVisible(false)}
         onSubmit={handleNamaSubmit}
       />
 
       <KelolaPerawatanModal
         visible={kelolaVisible}
         perawatanKustom={perawatanKustom}
+        busy={busyPerawatan}
         onClose={() => setKelolaVisible(false)}
         onUbah={handleUbahPerawatan}
         onHapus={handleHapusPerawatan}
