@@ -227,8 +227,10 @@ function JadwalFormScreen({ navigation, route }) {
           }
 
           try {
+            if (affected.length > 0) {
+              await saveSchedules(next);
+            }
             await savePerawatanKustom(nextTypes);
-            await saveSchedules(next);
           } catch (error) {
             console.warn('Gagal menghapus jenis perawatan', error);
             Alert.alert(
