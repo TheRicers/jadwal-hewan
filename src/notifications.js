@@ -1,4 +1,5 @@
 const Notifications = require('expo-notifications');
+const { bodyNotifikasiPerawatan } = require('./logic/perawatan');
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -9,12 +10,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-function bodyFor(perawatan) {
-  if (perawatan === 'makan') return 'Jangan lupa memberi makan hewan peliharaanmu.';
-  if (perawatan === 'mandi') return 'Jangan lupa memandikan hewan peliharaanmu.';
-  return 'Jangan lupa merawat hewan peliharaanmu.';
-}
-
 async function setupNotifications() {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
@@ -24,13 +19,13 @@ async function setupNotifications() {
   return requested.granted;
 }
 
-async function scheduleDaily(schedule) {
+async function scheduleDaily(schedule, perawatanKustom = []) {
   const [hour, minute] = schedule.jam.split(':').map(Number);
   try {
     return await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Waktunya merawat hewan',
-        body: bodyFor(schedule.perawatan),
+        body: bodyNotifikasiPerawatan(schedule.perawatan, perawatanKustom),
         sound: 'default',
         data: { scheduleId: schedule.id },
       },
@@ -55,7 +50,7 @@ async function cancelNotification(notificationId) {
   }
 }
 
-async function rescheduleMissing(schedules) {
+async function rescheduleMissing(schedules, perawatanKustom = []) {
   let changed = false;
   const next = [];
   for (const schedule of schedules) {
@@ -63,7 +58,7 @@ async function rescheduleMissing(schedules) {
       next.push(schedule);
       continue;
     }
-    const notificationId = await scheduleDaily(schedule);
+    const notificationId = await scheduleDaily(schedule, perawatanKustom);
     if (!notificationId) {
       next.push(schedule);
       continue;
