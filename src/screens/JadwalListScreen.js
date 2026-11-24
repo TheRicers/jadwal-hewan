@@ -9,6 +9,7 @@ const { loadAll, saveSchedules } = require('../storage/db');
 const {
   groupByJam, toggleDone, isDoneToday, deleteSchedule,
 } = require('../logic/schedules');
+const { resolvePerawatan } = require('../logic/perawatan');
 const { todayKey } = require('../utils/date');
 const { cancelNotification } = require('../notifications');
 const { useNotificationStatus } = require('../NotificationStatus');
@@ -20,12 +21,6 @@ const BULAN = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
 ];
 
-const PERAWATAN = {
-  makan: { label: 'Makan', icon: '🍽️' },
-  mandi: { label: 'Mandi', icon: '🛁' },
-  lainnya: { label: 'Lainnya', icon: '🐾' },
-};
-
 function tanggalPanjang(date = new Date()) {
   return `${HARI[date.getDay()]}, ${date.getDate()} ${BULAN[date.getMonth()]} ${date.getFullYear()}`;
 }
@@ -33,6 +28,7 @@ function tanggalPanjang(date = new Date()) {
 function JadwalListScreen({ navigation }) {
   const [pets, setPets] = useState([]);
   const [schedules, setSchedules] = useState([]);
+  const [perawatanKustom, setPerawatanKustom] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const { granted } = useNotificationStatus();
@@ -46,6 +42,7 @@ function JadwalListScreen({ navigation }) {
           if (!active) return;
           setPets(data.pets);
           setSchedules(data.schedules);
+          setPerawatanKustom(data.perawatanKustom);
           setLoaded(true);
         })
         .catch((error) => {
@@ -106,7 +103,7 @@ function JadwalListScreen({ navigation }) {
 
   function handleDelete(schedule) {
     const pet = petById.get(schedule.petId);
-    const perawatan = PERAWATAN[schedule.perawatan] || PERAWATAN.lainnya;
+    const perawatan = resolvePerawatan(schedule.perawatan, perawatanKustom);
     Alert.alert(
       'Hapus jadwal?',
       `${pet ? pet.nama : 'Hewan'} • ${perawatan.label} pukul ${schedule.jam}`,
@@ -128,7 +125,7 @@ function JadwalListScreen({ navigation }) {
 
   function renderItem({ item }) {
     const pet = petById.get(item.petId);
-    const perawatan = PERAWATAN[item.perawatan] || PERAWATAN.lainnya;
+    const perawatan = resolvePerawatan(item.perawatan, perawatanKustom);
     const done = isDoneToday(item, today);
 
     return (
