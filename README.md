@@ -1,8 +1,9 @@
-# Jadwal Merawat Hewan
+# PetPlanner
 
 Aplikasi mobile sederhana untuk mencatat jadwal harian perawatan hewan
-peliharaan (memberi makan dan memandikan) sekaligus mengingatkannya lewat
-notifikasi lokal. Dibuat untuk tugas personal mata kuliah pemrograman mobile.
+peliharaan — memberi makan, memandikan, dan jenis perawatan kustom — sekaligus
+mengingatkannya lewat notifikasi lokal. Dibuat untuk tugas personal mata kuliah
+pemrograman mobile.
 
 ## Fitur
 
@@ -64,5 +65,6 @@ src/utils/                    tanggal dan ID
   kustom dapat ditambahkan kembali lewat kode/config plugin.
 - Push notification dari server tidak didukung Expo Go; aplikasi ini hanya
   memakai notifikasi lokal sehingga tetap berjalan offline.
-- Expo Go tidak menghasilkan file APK. Untuk itu perlu development build/EAS
-  Build, di luar cakupan tugas ini.
+- Expo Go tidak menghasilkan file APK. Untuk build APK lokal, jalankan
+  `npx expo prebuild --platform android`, buka folder `android/` di Android
+  Studio, lalu buat signed APK. Alternatifnya memakai EAS Build.
