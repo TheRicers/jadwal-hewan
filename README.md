@@ -33,6 +33,22 @@ npm test          # tes logika (node:test)
 npx expo start    # jalankan Metro/Expo
 ```
 
+## Build APK
+
+Project ini memakai Continuous Native Generation, jadi folder `android/` dibuat
+otomatis:
+
+```bash
+npx expo prebuild --platform android
+cd android
+./gradlew assembleRelease
+```
+
+APK ada di `android/app/build/outputs/apk/release/app-release.apk`. Folder
+`android/` juga bisa dibuka langsung di Android Studio untuk build lewat GUI.
+Build release dari template Expo ditandatangani dengan debug keystore, jadi
+cocok untuk instalasi langsung di HP, bukan untuk upload ke Play Store.
+
 ## Struktur
 
 ```
