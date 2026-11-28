@@ -17,14 +17,20 @@ flowchart TD
         LIST["JadwalListScreen<br/>Daftar jadwal hari ini"]
         FORM["JadwalFormScreen<br/>Tambah / edit jadwal"]
         PET["HewanScreen<br/>Daftar hewan"]
+        HISTORY["RiwayatScreen<br/>Kalender dan rekap"]
+        SETTINGS["PengaturanScreen<br/>Notifikasi dan backup"]
     end
 
     LIST -- "FAB + / empty state" --> FORM
     LIST -- "Tap kartu jadwal" --> FORM
     LIST -- "Tombol Hewan" --> PET
     LIST -- "Empty state, belum ada hewan" --> PET
+    LIST -- "Tombol Riwayat" --> HISTORY
+    LIST -- "Ikon Pengaturan" --> SETTINGS
     FORM -- "Simpan / kembali" --> LIST
     PET -- "Kembali" --> LIST
+    HISTORY -- "Kembali" --> LIST
+    SETTINGS -- "Kembali" --> LIST
 
     subgraph ACTIONS["Aksi utama"]
         TOGGLE["Centang selesai<br/>tambah/hapus tanggal di riwayat"]
@@ -33,6 +39,7 @@ flowchart TD
         ADDPET["Tambah / edit hewan"]
         DELPET["Hapus hewan<br/>hapus jadwal + notifikasinya"]
         CUSTOM["+ Baru / Kelola<br/>jenis perawatan kustom"]
+        BACKUP["Ekspor / impor JSON<br/>dan hapus semua data"]
     end
 
     LIST --> TOGGLE
@@ -41,6 +48,7 @@ flowchart TD
     FORM --> CUSTOM
     PET --> ADDPET
     PET --> DELPET
+    SETTINGS --> BACKUP
 
     subgraph STORAGE["AsyncStorage"]
         DB1[("@pets")]
@@ -64,6 +72,10 @@ flowchart TD
     DELPET --> N2
     CUSTOM --> DB3
     CUSTOM --> N1
+    BACKUP --> DB1
+    BACKUP --> DB2
+    BACKUP --> DB3
+    BACKUP --> N2
 ```
 
 ## 2. Alur jenis perawatan kustom

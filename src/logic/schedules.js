@@ -34,6 +34,15 @@ function toggleDone(schedule, dateKey) {
   };
 }
 
+function isDuplicateSchedule(schedules, candidate, excludeId = null) {
+  return schedules.some((schedule) => (
+    schedule.id !== excludeId
+    && schedule.petId === candidate.petId
+    && schedule.perawatan === candidate.perawatan
+    && schedule.jam === candidate.jam
+  ));
+}
+
 function groupByJam(schedules) {
   const groups = new Map();
   schedules.forEach((schedule) => {
@@ -54,4 +63,5 @@ module.exports = {
   isDoneToday,
   toggleDone,
   groupByJam,
+  isDuplicateSchedule,
 };

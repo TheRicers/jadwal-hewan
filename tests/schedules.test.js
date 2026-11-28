@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   createSchedule, updateSchedule, deleteSchedule,
-  isDoneToday, toggleDone, groupByJam,
+  isDoneToday, toggleDone, groupByJam, isDuplicateSchedule,
 } = require('../src/logic/schedules');
 
 const base = () => createSchedule({ petId: 'p1', perawatan: 'makan', jam: '07:00' }, 's1');
@@ -37,6 +37,22 @@ test('updateSchedule mengganti jam tanpa memutasi daftar', () => {
 test('deleteSchedule membuang satu jadwal', () => {
   const list = [base(), createSchedule({ petId: 'p1', perawatan: 'mandi', jam: '17:00' }, 's2')];
   assert.deepEqual(deleteSchedule(list, 's1').map((s) => s.id), ['s2']);
+});
+
+test('isDuplicateSchedule mendeteksi hewan, perawatan, dan jam yang sama', () => {
+  const list = [base()];
+  assert.equal(
+    isDuplicateSchedule(list, { petId: 'p1', perawatan: 'makan', jam: '07:00' }),
+    true
+  );
+  assert.equal(
+    isDuplicateSchedule(list, { petId: 'p2', perawatan: 'makan', jam: '07:00' }),
+    false
+  );
+  assert.equal(
+    isDuplicateSchedule(list, { petId: 'p1', perawatan: 'makan', jam: '07:00' }, 's1'),
+    false
+  );
 });
 
 test('groupByJam mengelompokkan dan mengurutkan', () => {

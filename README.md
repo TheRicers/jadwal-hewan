@@ -9,7 +9,11 @@ pemrograman mobile.
 
 - CRUD hewan peliharaan (nama dan jenis).
 - CRUD jadwal perawatan: hewan, jenis perawatan, dan jam.
+- Jenis perawatan kustom yang bisa ditambah, diubah, dan dihapus.
 - Centang "selesai" per jadwal untuk hari ini.
+- Riwayat dan kalender: rekap selesai per hari, streak, dan ringkasan per hewan.
+- Pengaturan: status notifikasi, ekspor/impor backup JSON, dan hapus semua data.
+- Peringatan saat menyimpan jadwal yang identik.
 - Notifikasi pengingat berulang setiap hari pada jam yang dipilih.
 - Semua data tersimpan lokal di HP (`AsyncStorage`), tanpa akun, server, atau internet.
 
@@ -49,6 +53,9 @@ APK ada di `android/app/build/outputs/apk/release/app-release.apk`. Folder
 Build release dari template Expo ditandatangani dengan debug keystore, jadi
 cocok untuk instalasi langsung di HP, bukan untuk upload ke Play Store.
 
+Versi 1.10.0 menggunakan ikon dan splash baru. Backup data tersedia melalui
+menu Pengaturan (ikon roda gigi) dalam format JSON.
+
 ## Struktur
 
 ```
@@ -56,17 +63,21 @@ App.js                        navigasi + penyiapan notifikasi saat mulai
 src/screens/JadwalListScreen  daftar jadwal per jam, centang selesai, hapus
 src/screens/JadwalFormScreen  form tambah/edit jadwal + pemilih jam
 src/screens/HewanScreen       CRUD hewan (hapus ikut menghapus jadwalnya)
+src/screens/RiwayatScreen     kalender dan rekap riwayat perawatan
+src/screens/PengaturanScreen  status notifikasi, backup/restore, reset data
+src/components                modal jenis perawatan dan banner error
 src/storage/db.js             baca/tulis AsyncStorage
-src/notifications.js          izin, channel Android, jadwal notifikasi harian
-src/logic/                    fungsi CRUD murni (diuji otomatis)
+src/notifications.js          izin, jadwal notifikasi harian
+src/logic/                    CRUD, riwayat, backup, dan validasi (diuji otomatis)
 src/utils/                    tanggal dan ID
 ```
 
 ## Data
 
 ```
-@pets:      [{ id, nama, jenis }]
-@schedules: [{ id, petId, perawatan, jam, notificationId, riwayat }]
+@pets:             [{ id, nama, jenis }]
+@schedules:        [{ id, petId, perawatan, jam, notificationId, riwayat }]
+@perawatanKustom:  [{ id, nama }]
 ```
 
 `riwayat` berisi tanggal `YYYY-MM-DD` saat jadwal dicentang selesai.

@@ -50,6 +50,14 @@ async function cancelNotification(notificationId) {
   }
 }
 
+async function cancelAllNotifications() {
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch (error) {
+    console.warn('Gagal membatalkan semua notifikasi', error);
+  }
+}
+
 async function rescheduleMissing(schedules, perawatanKustom = []) {
   let changed = false;
   const next = [];
@@ -73,5 +81,6 @@ module.exports = {
   setupNotifications,
   scheduleDaily,
   cancelNotification,
+  cancelAllNotifications,
   rescheduleMissing,
 };

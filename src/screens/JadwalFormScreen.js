@@ -7,13 +7,14 @@ const DateTimePicker = require('@react-native-community/datetimepicker').default
 
 const { loadAll, loadSchedules, saveSchedules, savePerawatanKustom } = require('../storage/db');
 const {
-  createSchedule, updateSchedule,
+  createSchedule, updateSchedule, isDuplicateSchedule,
 } = require('../logic/schedules');
 const {
   BUILTIN_PERAWATAN, customPerawatanValue, createPerawatanKustom, validateNamaPerawatan,
   renamePerawatanKustom, removePerawatanKustom, schedulesUsingPerawatan, detachPerawatanKustom,
 } = require('../logic/perawatan');
 const { NamaPerawatanModal, KelolaPerawatanModal } = require('../components/PerawatanModal');
+const DataErrorBanner = require('../components/DataErrorBanner');
 const { newId } = require('../utils/id');
 const { formatJam } = require('../utils/date');
 const { scheduleDaily, cancelNotification } = require('../notifications');
@@ -34,6 +35,20 @@ function dateDariJam(jam) {
   return date;
 }
 
+function konfirmasiDuplikat() {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Jadwal serupa sudah ada',
+      'Hewan, jenis perawatan, dan jam yang sama sudah memiliki jadwal. Tetap simpan?',
+      [
+        { text: 'Batal', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Tetap simpan', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) }
+    );
+  });
+}
+
 function JadwalFormScreen({ navigation, route }) {
   const scheduleId = route.params?.scheduleId;
   const isEdit = Boolean(scheduleId);
@@ -52,31 +67,39 @@ function JadwalFormScreen({ navigation, route }) {
   });
   const [showPicker, setShowPicker] = useState(Platform.OS === 'ios');
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const data = await loadAll();
-      if (!active) return;
-      const daftarHewan = data.pets;
-      setPets(daftarHewan);
-      setPerawatanKustom(data.perawatanKustom);
-      setPetId((current) => current || daftarHewan[0]?.id || null);
+      try {
+        const data = await loadAll();
+        if (!active) return;
+        setLoadError(false);
+        const daftarHewan = data.pets;
+        setPets(daftarHewan);
+        setPerawatanKustom(data.perawatanKustom);
+        setPetId((current) => current || daftarHewan[0]?.id || null);
 
-      if (scheduleId) {
-        const existing = data.schedules.find((item) => item.id === scheduleId);
-        if (existing) {
-          setPetId(existing.petId);
-          setPerawatan(existing.perawatan);
-          setJamDate(dateDariJam(existing.jam));
+        if (scheduleId) {
+          const existing = data.schedules.find((item) => item.id === scheduleId);
+          if (existing) {
+            setPetId(existing.petId);
+            setPerawatan(existing.perawatan);
+            setJamDate(dateDariJam(existing.jam));
+          }
         }
+      } catch (error) {
+        console.warn('Gagal memuat data jadwal', error);
+        if (active) setLoadError(true);
       }
     }
     load();
     return () => {
       active = false;
     };
-  }, [scheduleId]);
+  }, [scheduleId, reloadToken]);
 
   function handleTimeChange(event, value) {
     if (Platform.OS === 'android') setShowPicker(false);
@@ -85,6 +108,10 @@ function JadwalFormScreen({ navigation, route }) {
   }
 
   async function handleSave() {
+    if (loadError) {
+      Alert.alert('Data belum siap', 'Muat ulang data terlebih dahulu.');
+      return;
+    }
     if (!petId) {
       Alert.alert('Hewan belum dipilih', 'Tambahkan hewan terlebih dahulu di menu Hewan.');
       return;
@@ -101,6 +128,15 @@ function JadwalFormScreen({ navigation, route }) {
     setSaving(true);
     try {
       const schedules = await loadSchedules();
+      const duplicate = isDuplicateSchedule(
+        schedules,
+        { petId, perawatan, jam },
+        isEdit ? scheduleId : null
+      );
+      if (duplicate) {
+        const lanjut = await konfirmasiDuplikat();
+        if (!lanjut) return;
+      }
 
       if (isEdit) {
         const current = schedules.find((item) => item.id === scheduleId);
@@ -199,7 +235,14 @@ function JadwalFormScreen({ navigation, route }) {
 
   async function handleHapusPerawatan(item) {
     const value = customPerawatanValue(item.id);
-    const schedules = await loadSchedules();
+    let schedules;
+    try {
+      schedules = await loadSchedules();
+    } catch (error) {
+      console.warn('Gagal memuat jadwal untuk menghapus jenis perawatan', error);
+      Alert.alert('Gagal memuat', 'Jadwal tidak dapat dimuat. Coba lagi.');
+      return;
+    }
     const affected = schedulesUsingPerawatan(schedules, value);
     const pesan = affected.length > 0
       ? `${affected.length} jadwal yang memakai jenis ini akan diubah menjadi Lainnya.`
@@ -254,16 +297,25 @@ function JadwalFormScreen({ navigation, route }) {
   return (
     <>
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {loadError ? (
+          <DataErrorBanner
+            message="Data jadwal tidak dapat dimuat. Form dinonaktifkan agar data tidak tertimpa."
+            onRetry={() => setReloadToken((value) => value + 1)}
+          />
+        ) : null}
+
         <Text style={styles.label}>Hewan</Text>
         {pets.length === 0 ? (
-          <View style={styles.warning}>
-            <Text style={styles.warningText}>
-              Belum ada hewan. Tambahkan hewan dulu agar bisa membuat jadwal.
-            </Text>
-            <Pressable style={styles.warningButton} onPress={() => navigation.navigate('Hewan')}>
-              <Text style={styles.warningButtonText}>Tambah Hewan</Text>
-            </Pressable>
-          </View>
+          loadError ? null : (
+            <View style={styles.warning}>
+              <Text style={styles.warningText}>
+                Belum ada hewan. Tambahkan hewan dulu agar bisa membuat jadwal.
+              </Text>
+              <Pressable style={styles.warningButton} onPress={() => navigation.navigate('Hewan')}>
+                <Text style={styles.warningButtonText}>Tambah Hewan</Text>
+              </Pressable>
+            </View>
+          )
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
             {pets.map((pet) => {
@@ -292,9 +344,11 @@ function JadwalFormScreen({ navigation, route }) {
           <Text style={styles.labelInline}>Jenis perawatan</Text>
           <Pressable
             onPress={() => setKelolaVisible(true)}
+            disabled={loadError}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Kelola jenis perawatan"
+            accessibilityState={{ disabled: loadError }}
           >
             <Text style={styles.kelolaLink}>Kelola</Text>
           </Pressable>
@@ -338,7 +392,9 @@ function JadwalFormScreen({ navigation, route }) {
           {!perawatanDikenal ? (
             <View
               style={[styles.perawatan, styles.perawatanSelected]}
+              accessible
               accessibilityRole="radio"
+              accessibilityLabel="Jenis perawatan lama: Lainnya"
               accessibilityState={{ selected: true }}
             >
               <Text style={styles.perawatanIcon}>🐾</Text>
@@ -347,9 +403,11 @@ function JadwalFormScreen({ navigation, route }) {
           ) : null}
           <Pressable
             onPress={() => setNamaModalVisible(true)}
+            disabled={loadError}
             style={[styles.perawatan, styles.perawatanBaru]}
             accessibilityRole="button"
             accessibilityLabel="Tambah jenis perawatan baru"
+            accessibilityState={{ disabled: loadError }}
           >
             <Text style={[styles.perawatanIcon, styles.perawatanBaruText]}>+</Text>
             <Text style={[styles.perawatanText, styles.perawatanBaruText]}>Baru</Text>
@@ -395,11 +453,15 @@ function JadwalFormScreen({ navigation, route }) {
         </Text>
 
         <Pressable
-          style={[styles.saveButton, (saving || busyPerawatan) && styles.saveButtonDisabled]}
+          style={[
+            styles.saveButton,
+            (saving || busyPerawatan || loadError) && styles.saveButtonDisabled,
+          ]}
           onPress={handleSave}
-          disabled={saving || busyPerawatan || pets.length === 0}
+          disabled={saving || busyPerawatan || loadError || pets.length === 0}
           accessibilityRole="button"
           accessibilityLabel="Simpan jadwal"
+          accessibilityState={{ disabled: saving || busyPerawatan || loadError || pets.length === 0 }}
         >
           <Text style={styles.saveText}>
             {saving ? 'Menyimpan…' : isEdit ? 'Simpan Perubahan' : 'Simpan Jadwal'}

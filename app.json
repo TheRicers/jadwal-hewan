@@ -2,7 +2,7 @@
   "expo": {
     "name": "PetPlanner",
     "slug": "petplanner",
-    "version": "1.0.0",
+    "version": "1.10.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,10 +11,10 @@
     },
     "android": {
       "package": "com.thericers.petplanner",
+      "versionCode": 2,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#2F7D6D",
         "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       }
     },
@@ -22,7 +22,16 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#2F7D6D",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180
+        }
+      ]
     ]
   }
 }

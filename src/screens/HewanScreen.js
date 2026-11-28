@@ -12,6 +12,7 @@ const {
 const { deletePet } = require('../logic/pets');
 const { newId } = require('../utils/id');
 const { cancelNotification } = require('../notifications');
+const DataErrorBanner = require('../components/DataErrorBanner');
 const { colors, spacing, radius } = require('../theme');
 
 const JENIS_CONTOH = ['Kucing', 'Anjing', 'Kelinci', 'Burung', 'Ikan'];
@@ -23,19 +24,24 @@ function HewanScreen() {
   const [editingId, setEditingId] = useState(null);
   const [nama, setNama] = useState('');
   const [jenis, setJenis] = useState('');
+  const [loadError, setLoadError] = useState(false);
+
+  const loadData = useCallback(async () => {
+    setLoadError(false);
+    try {
+      const data = await loadAll();
+      setPets(data.pets);
+      setSchedules(data.schedules);
+    } catch (error) {
+      console.warn('Gagal memuat data hewan', error);
+      setLoadError(true);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      loadAll().then((data) => {
-        if (!active) return;
-        setPets(data.pets);
-        setSchedules(data.schedules);
-      });
-      return () => {
-        active = false;
-      };
-    }, [])
+      loadData();
+    }, [loadData])
   );
 
   function openAdd() {
@@ -53,6 +59,10 @@ function HewanScreen() {
   }
 
   async function handleSave() {
+    if (loadError) {
+      Alert.alert('Data belum siap', 'Muat ulang data terlebih dahulu.');
+      return;
+    }
     const namaBersih = nama.trim();
     const jenisBersih = jenis.trim();
     if (!namaBersih) {
@@ -71,9 +81,14 @@ function HewanScreen() {
       next = [...pets, { id: newId(), nama: namaBersih, jenis: jenisBersih || 'Hewan' }];
     }
 
-    setPets(next);
-    setModalVisible(false);
-    await savePets(next);
+    try {
+      await savePets(next);
+      setPets(next);
+      setModalVisible(false);
+    } catch (error) {
+      console.warn('Gagal menyimpan hewan', error);
+      Alert.alert('Gagal menyimpan', 'Data hewan tidak dapat disimpan.');
+    }
   }
 
   function handleDelete(pet) {
@@ -88,16 +103,25 @@ function HewanScreen() {
         text: 'Hapus',
         style: 'destructive',
         onPress: async () => {
-          const result = deletePet(pets, schedules, pet.id);
-          for (const schedule of result.removed) {
-            await cancelNotification(schedule.notificationId);
+          if (loadError) {
+            Alert.alert('Data belum siap', 'Muat ulang data terlebih dahulu.');
+            return;
           }
-          setPets(result.pets);
-          setSchedules(result.schedules);
-          await Promise.all([
-            savePets(result.pets),
-            saveSchedules(result.schedules),
-          ]);
+          const result = deletePet(pets, schedules, pet.id);
+          try {
+            await Promise.all([
+              savePets(result.pets),
+              saveSchedules(result.schedules),
+            ]);
+            setPets(result.pets);
+            setSchedules(result.schedules);
+            for (const schedule of result.removed) {
+              await cancelNotification(schedule.notificationId);
+            }
+          } catch (error) {
+            console.warn('Gagal menghapus hewan', error);
+            Alert.alert('Gagal menghapus', 'Data hewan tidak dapat dihapus.');
+          }
         },
       },
     ]);
@@ -118,19 +142,23 @@ function HewanScreen() {
         </View>
         <Pressable
           onPress={() => openEdit(item)}
+          disabled={loadError}
           hitSlop={8}
           style={styles.action}
           accessibilityRole="button"
           accessibilityLabel={`Edit ${item.nama}`}
+          accessibilityState={{ disabled: loadError }}
         >
           <Text style={styles.actionText}>Ubah</Text>
         </Pressable>
         <Pressable
           onPress={() => handleDelete(item)}
+          disabled={loadError}
           hitSlop={8}
           style={[styles.action, styles.actionDanger]}
           accessibilityRole="button"
           accessibilityLabel={`Hapus ${item.nama}`}
+          accessibilityState={{ disabled: loadError }}
         >
           <Text style={[styles.actionText, styles.actionDangerText]}>Hapus</Text>
         </Pressable>
@@ -148,18 +176,33 @@ function HewanScreen() {
           styles.listContent,
           pets.length === 0 && styles.listContentEmpty,
         ]}
+        ListHeaderComponent={loadError ? (
+          <DataErrorBanner
+            message="Data hewan tidak dapat dimuat. Perubahan dinonaktifkan agar data tidak tertimpa."
+            onRetry={loadData}
+          />
+        ) : null}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>🐶</Text>
-            <Text style={styles.emptyTitle}>Belum ada hewan</Text>
-            <Text style={styles.emptyBody}>
-              Tambahkan hewan peliharaanmu agar bisa dibuatkan jadwal perawatan.
-            </Text>
-          </View>
+          loadError ? null : (
+            <View style={styles.empty}>
+              <Text style={styles.emptyIcon}>🐶</Text>
+              <Text style={styles.emptyTitle}>Belum ada hewan</Text>
+              <Text style={styles.emptyBody}>
+                Tambahkan hewan peliharaanmu agar bisa dibuatkan jadwal perawatan.
+              </Text>
+            </View>
+          )
         }
       />
 
-      <Pressable style={styles.fab} onPress={openAdd} accessibilityRole="button" accessibilityLabel="Tambah hewan">
+      <Pressable
+        style={[styles.fab, loadError && styles.fabDisabled]}
+        onPress={openAdd}
+        disabled={loadError}
+        accessibilityRole="button"
+        accessibilityLabel="Tambah hewan"
+        accessibilityState={{ disabled: loadError }}
+      >
         <Text style={styles.fabText}>+</Text>
       </Pressable>
 
@@ -283,6 +326,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
   fabText: { color: '#FFFFFF', fontSize: 30, lineHeight: 34, fontWeight: '600' },
+  fabDisabled: { opacity: 0.45 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(16, 32, 28, 0.45)',

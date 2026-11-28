@@ -8,6 +8,8 @@ const { SafeAreaProvider } = require('react-native-safe-area-context');
 const JadwalListScreen = require('./src/screens/JadwalListScreen');
 const JadwalFormScreen = require('./src/screens/JadwalFormScreen');
 const HewanScreen = require('./src/screens/HewanScreen');
+const RiwayatScreen = require('./src/screens/RiwayatScreen');
+const PengaturanScreen = require('./src/screens/PengaturanScreen');
 const { NotificationStatusContext } = require('./src/NotificationStatus');
 const { setupNotifications, rescheduleMissing } = require('./src/notifications');
 const { loadSchedules, saveSchedules, loadPerawatanKustom } = require('./src/storage/db');
@@ -81,6 +83,16 @@ function App() {
               name="Hewan"
               component={HewanScreen}
               options={{ title: 'Hewan Saya' }}
+            />
+            <Stack.Screen
+              name="Riwayat"
+              component={RiwayatScreen}
+              options={{ title: 'Riwayat Perawatan' }}
+            />
+            <Stack.Screen
+              name="Pengaturan"
+              component={PengaturanScreen}
+              options={{ title: 'Pengaturan' }}
             />
           </Stack.Navigator>
         </NavigationContainer>
