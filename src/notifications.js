@@ -69,10 +69,31 @@ async function cancelAllNotifications() {
 }
 
 async function rescheduleMissing(schedules, perawatanKustom = []) {
+  // Bersihkan notifikasi yang tidak lagi dimiliki jadwal mana pun dan
+  // sinkronkan ID yang tersimpan dengan notifikasi yang benar-benar aktif.
+  let scheduledIds = null;
+  try {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    scheduledIds = new Set(scheduled.map((notification) => notification.identifier));
+    const activeIds = new Set(
+      schedules.map((schedule) => schedule.notificationId).filter(Boolean)
+    );
+    for (const notification of scheduled) {
+      if (!activeIds.has(notification.identifier)) {
+        await cancelNotification(notification.identifier);
+      }
+    }
+  } catch (error) {
+    console.warn('Gagal membersihkan notifikasi lama', error);
+  }
+
   let changed = false;
   const next = [];
   for (const schedule of schedules) {
-    if (schedule.notificationId) {
+    if (
+      schedule.notificationId
+      && (scheduledIds === null || scheduledIds.has(schedule.notificationId))
+    ) {
       next.push(schedule);
       continue;
     }

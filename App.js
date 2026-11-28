@@ -1,5 +1,5 @@
 const React = require('react');
-const { useCallback, useEffect, useState } = React;
+const { useCallback, useEffect, useRef, useState } = React;
 const { AppState } = require('react-native');
 const { StatusBar } = require('expo-status-bar');
 const { NavigationContainer } = require('@react-navigation/native');
@@ -22,31 +22,44 @@ const Stack = createNativeStackNavigator();
 
 function App() {
   const [notificationGranted, setNotificationGranted] = useState(null);
+  const syncInFlight = useRef(null);
 
   const syncNotifications = useCallback(async (requestPermission = false) => {
-    let granted = false;
-    try {
-      granted = requestPermission
-        ? await setupNotifications()
-        : await getNotificationPermission();
-    } catch (error) {
-      console.warn('Gagal menyiapkan notifikasi', error);
-    }
-    setNotificationGranted(granted);
-    if (!granted) return;
+    if (syncInFlight.current) return syncInFlight.current;
 
-    try {
-      const [schedules, perawatanKustom] = await Promise.all([
-        loadSchedules(),
-        loadPerawatanKustom(),
-      ]);
-      const result = await rescheduleMissing(schedules, perawatanKustom);
-      if (result.changed) {
-        await saveSchedules(result.schedules);
+    const task = (async () => {
+      let granted = false;
+      try {
+        granted = requestPermission
+          ? await setupNotifications()
+          : await getNotificationPermission();
+      } catch (error) {
+        console.warn('Gagal menyiapkan notifikasi', error);
       }
-    } catch (error) {
-      console.warn('Gagal menjadwalkan ulang notifikasi', error);
+      setNotificationGranted(granted);
+      if (!granted) return;
+
+      try {
+        const [schedules, perawatanKustom] = await Promise.all([
+          loadSchedules(),
+          loadPerawatanKustom(),
+        ]);
+        const result = await rescheduleMissing(schedules, perawatanKustom);
+        if (result.changed) {
+          await saveSchedules(result.schedules);
+        }
+      } catch (error) {
+        console.warn('Gagal menjadwalkan ulang notifikasi', error);
+      }
+    })();
+
+    syncInFlight.current = task;
+    try {
+      await task;
+    } finally {
+      if (syncInFlight.current === task) syncInFlight.current = null;
     }
+    return task;
   }, []);
 
   useEffect(() => {
