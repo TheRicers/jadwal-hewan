@@ -15,6 +15,7 @@ pemrograman mobile.
 - Pengaturan: status notifikasi, ekspor/impor backup JSON, dan hapus semua data.
 - Peringatan saat menyimpan jadwal yang identik.
 - Notifikasi pengingat berulang setiap hari pada jam yang dipilih.
+- Alarm tepat waktu Android melalui izin \textit{Alarms \& reminders}.
 - Semua data tersimpan lokal di HP (`AsyncStorage`), tanpa akun, server, atau internet.
 
 ## Menjalankan

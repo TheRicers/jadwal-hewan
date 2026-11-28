@@ -230,6 +230,13 @@ function PengaturanScreen() {
       }
 
       const data = await loadAll();
+      if (data.errors.length > 0) {
+        Alert.alert(
+          'Data belum lengkap',
+          'Muat ulang data terlebih dahulu sebelum mengubah jadwal alarm.'
+        );
+        return;
+      }
       // Kosongkan ID lama dulu agar kegagalan di tengah proses bisa dipulihkan
       // oleh rescheduleMissing saat aplikasi dibuka kembali.
       await saveAll({
