@@ -1,5 +1,6 @@
 const React = require('react');
-const { useEffect, useState } = React;
+const { useCallback, useEffect, useState } = React;
+const { AppState } = require('react-native');
 const { StatusBar } = require('expo-status-bar');
 const { NavigationContainer } = require('@react-navigation/native');
 const { createNativeStackNavigator } = require('@react-navigation/native-stack');
@@ -11,7 +12,9 @@ const HewanScreen = require('./src/screens/HewanScreen');
 const RiwayatScreen = require('./src/screens/RiwayatScreen');
 const PengaturanScreen = require('./src/screens/PengaturanScreen');
 const { NotificationStatusContext } = require('./src/NotificationStatus');
-const { setupNotifications, rescheduleMissing } = require('./src/notifications');
+const {
+  getNotificationPermission, setupNotifications, rescheduleMissing,
+} = require('./src/notifications');
 const { loadSchedules, saveSchedules, loadPerawatanKustom } = require('./src/storage/db');
 const { colors } = require('./src/theme');
 
@@ -20,43 +23,47 @@ const Stack = createNativeStackNavigator();
 function App() {
   const [notificationGranted, setNotificationGranted] = useState(null);
 
-  useEffect(() => {
-    let active = true;
-
-    async function prepareNotifications() {
-      let granted = false;
-      try {
-        granted = await setupNotifications();
-      } catch (error) {
-        console.warn('Gagal menyiapkan notifikasi', error);
-      }
-      if (!active) return;
-      setNotificationGranted(granted);
-      if (!granted) return;
-
-      try {
-        const [schedules, perawatanKustom] = await Promise.all([
-          loadSchedules(),
-          loadPerawatanKustom(),
-        ]);
-        const result = await rescheduleMissing(schedules, perawatanKustom);
-        if (result.changed) {
-          await saveSchedules(result.schedules);
-        }
-      } catch (error) {
-        console.warn('Gagal menjadwalkan ulang notifikasi', error);
-      }
+  const syncNotifications = useCallback(async (requestPermission = false) => {
+    let granted = false;
+    try {
+      granted = requestPermission
+        ? await setupNotifications()
+        : await getNotificationPermission();
+    } catch (error) {
+      console.warn('Gagal menyiapkan notifikasi', error);
     }
+    setNotificationGranted(granted);
+    if (!granted) return;
 
-    prepareNotifications();
-    return () => {
-      active = false;
-    };
+    try {
+      const [schedules, perawatanKustom] = await Promise.all([
+        loadSchedules(),
+        loadPerawatanKustom(),
+      ]);
+      const result = await rescheduleMissing(schedules, perawatanKustom);
+      if (result.changed) {
+        await saveSchedules(result.schedules);
+      }
+    } catch (error) {
+      console.warn('Gagal menjadwalkan ulang notifikasi', error);
+    }
   }, []);
+
+  useEffect(() => {
+    syncNotifications(true);
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') syncNotifications(false);
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [syncNotifications]);
 
   return (
     <SafeAreaProvider>
-      <NotificationStatusContext.Provider value={{ granted: notificationGranted }}>
+      <NotificationStatusContext.Provider
+        value={{ granted: notificationGranted, refresh: () => syncNotifications(false) }}
+      >
         <StatusBar style="light" />
         <NavigationContainer>
           <Stack.Navigator

@@ -1,5 +1,5 @@
 const React = require('react');
-const { useCallback, useEffect, useState } = React;
+const { useCallback, useEffect, useRef, useState } = React;
 const {
   Alert, AppState, Pressable, SectionList, StyleSheet, Text, View,
 } = require('react-native');
@@ -34,22 +34,29 @@ function JadwalListScreen({ navigation }) {
   const [loadError, setLoadError] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const { granted } = useNotificationStatus();
+  const requestRef = useRef(0);
 
   const loadData = useCallback(async () => {
+    const request = requestRef.current + 1;
+    requestRef.current = request;
     setLoaded(false);
-    setLoadError(false);
     try {
       const data = await loadAll();
+      if (request !== requestRef.current) return;
       setPets(data.pets);
       setSchedules(data.schedules);
       setPerawatanKustom(data.perawatanKustom);
+      setLoadError(data.errors.length > 0);
       setLoaded(true);
     } catch (error) {
+      if (request !== requestRef.current) return;
       console.warn('Gagal memuat data', error);
       setLoadError(true);
       setLoaded(true);
     }
   }, []);
+
+  const canWrite = loaded && !loadError;
 
   useFocusEffect(
     useCallback(() => {
@@ -117,7 +124,7 @@ function JadwalListScreen({ navigation }) {
   const doneCount = schedules.filter((item) => isDoneToday(item, today)).length;
 
   async function handleToggle(schedule) {
-    if (loadError) return;
+    if (!canWrite) return;
     const next = schedules.map((item) => (
       item.id === schedule.id ? toggleDone(item, today) : item
     ));
@@ -131,7 +138,7 @@ function JadwalListScreen({ navigation }) {
   }
 
   function handleDelete(schedule) {
-    if (loadError) return;
+    if (!canWrite) return;
     const pet = petById.get(schedule.petId);
     const perawatan = resolvePerawatan(schedule.perawatan, perawatanKustom);
     Alert.alert(
@@ -167,10 +174,10 @@ function JadwalListScreen({ navigation }) {
       <Pressable
         style={[styles.card, done && styles.cardDone]}
         onPress={() => navigation.navigate('JadwalForm', { scheduleId: item.id })}
-        disabled={loadError}
+        disabled={!canWrite}
         accessibilityRole="button"
         accessibilityLabel={`Edit jadwal ${perawatan.label} ${pet ? pet.nama : ''}`}
-        accessibilityState={{ disabled: loadError }}
+        accessibilityState={{ disabled: !canWrite }}
       >
         <View style={styles.iconCircle}>
           <Text style={styles.icon}>{perawatan.icon}</Text>
@@ -185,23 +192,23 @@ function JadwalListScreen({ navigation }) {
         </View>
         <Pressable
           onPress={() => handleToggle(item)}
-          disabled={loadError}
+          disabled={!canWrite}
           hitSlop={10}
           style={[styles.check, done && styles.checkDone]}
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: done, disabled: loadError }}
+          accessibilityState={{ checked: done, disabled: !canWrite }}
           accessibilityLabel={done ? 'Tandai belum selesai' : 'Tandai selesai'}
         >
           {done ? <Text style={styles.checkMark}>✓</Text> : null}
         </Pressable>
         <Pressable
           onPress={() => handleDelete(item)}
-          disabled={loadError}
+          disabled={!canWrite}
           hitSlop={10}
           style={styles.deleteButton}
           accessibilityRole="button"
           accessibilityLabel="Hapus jadwal"
-          accessibilityState={{ disabled: loadError }}
+          accessibilityState={{ disabled: !canWrite }}
         >
           <Text style={styles.deleteText}>🗑</Text>
         </Pressable>
@@ -275,12 +282,12 @@ function JadwalListScreen({ navigation }) {
       />
 
       <Pressable
-        style={[styles.fab, loadError && styles.fabDisabled]}
+        style={[styles.fab, !canWrite && styles.fabDisabled]}
         onPress={() => navigation.navigate('JadwalForm')}
-        disabled={loadError}
+        disabled={!canWrite}
         accessibilityRole="button"
         accessibilityLabel="Tambah jadwal"
-        accessibilityState={{ disabled: loadError }}
+        accessibilityState={{ disabled: !canWrite }}
       >
         <Text style={styles.fabText}>+</Text>
       </Pressable>

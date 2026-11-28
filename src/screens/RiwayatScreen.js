@@ -1,5 +1,5 @@
 const React = require('react');
-const { useCallback, useMemo, useState } = React;
+const { useCallback, useMemo, useRef, useState } = React;
 const { Pressable, ScrollView, StyleSheet, Text, View } = require('react-native');
 const { useFocusEffect } = require('@react-navigation/native');
 
@@ -32,19 +32,26 @@ function RiwayatScreen() {
     return { year: now.getFullYear(), month: now.getMonth() };
   });
   const [selectedDate, setSelectedDate] = useState(null);
+  const [today, setToday] = useState(() => todayKey());
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const requestRef = useRef(0);
 
   const loadData = useCallback(async () => {
+    const request = requestRef.current + 1;
+    requestRef.current = request;
+    setToday(todayKey());
     setLoaded(false);
-    setLoadError(false);
     try {
       const data = await loadAll();
+      if (request !== requestRef.current) return;
       setPets(data.pets);
       setSchedules(data.schedules);
       setPerawatanKustom(data.perawatanKustom);
+      setLoadError(data.errors.length > 0);
       setLoaded(true);
     } catch (error) {
+      if (request !== requestRef.current) return;
       console.warn('Gagal memuat riwayat', error);
       setLoadError(true);
       setLoaded(true);
@@ -69,7 +76,7 @@ function RiwayatScreen() {
     () => buildCalendar(month.year, month.month),
     [month]
   );
-  const streak = useMemo(() => currentStreak(schedules, todayKey()), [schedules]);
+  const streak = useMemo(() => currentStreak(schedules, today), [schedules, today]);
 
   const petById = new Map(pets.map((pet) => [pet.id, pet]));
   const perPetRows = Object.entries(perPet)
@@ -213,7 +220,11 @@ function RiwayatScreen() {
       <Text style={styles.sectionTitle}>Ringkasan per hewan</Text>
       {perPetRows.length === 0 ? (
         <Text style={styles.muted}>
-          {loaded ? 'Belum ada perawatan selesai bulan ini.' : 'Memuat riwayat…'}
+          {loadError
+            ? 'Ringkasan tidak dapat dimuat.'
+            : loaded
+              ? 'Belum ada perawatan selesai bulan ini.'
+              : 'Memuat riwayat…'}
         </Text>
       ) : (
         perPetRows.map((row) => (

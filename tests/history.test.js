@@ -40,6 +40,15 @@ test('perPetCounts mengelompokkan jumlah selesai per hewan', () => {
   assert.deepEqual(perPetCounts(schedules, 2026, 10), { p1: 3, p2: 1 });
 });
 
+test('ringkasan mengabaikan tanggal duplikat dan nilai non-string', () => {
+  const kotor = [{
+    petId: 'p1',
+    riwayat: ['2026-11-01', '2026-11-01', null, 42],
+  }];
+  assert.equal(monthSummary(kotor, 2026, 10).total, 1);
+  assert.deepEqual(perPetCounts(kotor, 2026, 10), { p1: 1 });
+});
+
 test('currentStreak menghitung hari berurutan sampai hari ini', () => {
   const riwayat = [
     { riwayat: ['2026-11-25', '2026-11-26', '2026-11-27'] },

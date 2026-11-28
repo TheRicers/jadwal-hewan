@@ -36,6 +36,7 @@ test('createBackup membungkus data dengan versi dan waktu ekspor', () => {
   assert.equal(backup.version, BACKUP_VERSION);
   assert.equal(backup.exportedAt, '2026-11-28T00:00:00.000Z');
   assert.deepEqual(backup.pets, payload().pets);
+  assert.equal(backup.schedules[0].notificationId, undefined);
 });
 
 test('validateBackup menerima data valid dan membuang notificationId', () => {
@@ -79,5 +80,11 @@ test('validateBackup menolak koleksi yang bukan array dan id duplikat', () => {
   assert.equal(validateBackup(payload({ pets: {} })).valid, false);
   assert.equal(validateBackup(payload({
     pets: [{ id: 'p1', nama: 'Milo' }, { id: 'p1', nama: 'Bruno' }],
+  })).valid, false);
+});
+
+test('validateBackup menolak jadwal yang merujuk hewan tidak ada', () => {
+  assert.equal(validateBackup(payload({
+    schedules: [{ id: 's1', petId: 'p2', perawatan: 'makan', jam: '07:00' }],
   })).valid, false);
 });

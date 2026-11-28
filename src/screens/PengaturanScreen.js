@@ -1,5 +1,5 @@
 const React = require('react');
-const { useCallback, useState } = React;
+const { useCallback, useRef, useState } = React;
 const {
   ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View,
 } = require('react-native');
@@ -41,17 +41,22 @@ function PengaturanScreen() {
   const [loadError, setLoadError] = useState(false);
   const [busy, setBusy] = useState(false);
   const { granted } = useNotificationStatus();
+  const requestRef = useRef(0);
 
   const loadData = useCallback(async () => {
-    setLoadError(false);
+    const request = requestRef.current + 1;
+    requestRef.current = request;
     try {
       const data = await loadAll();
+      if (request !== requestRef.current) return;
       setCounts({
         pets: data.pets.length,
         schedules: data.schedules.length,
         perawatanKustom: data.perawatanKustom.length,
       });
+      setLoadError(data.errors.length > 0);
     } catch (error) {
+      if (request !== requestRef.current) return;
       console.warn('Gagal memuat data pengaturan', error);
       setLoadError(true);
     }
@@ -67,6 +72,16 @@ function PengaturanScreen() {
     setBusy(true);
     try {
       const data = await loadAll();
+      if (data.errors.length > 0) {
+        await new Promise((resolve) => {
+          Alert.alert(
+            'Backup sebagian',
+            'Sebagian data tidak dapat dibaca. Backup tetap dibuat dari data yang berhasil dibaca.',
+            [{ text: 'Lanjut', onPress: resolve }],
+            { cancelable: false, onDismiss: resolve }
+          );
+        });
+      }
       const backup = createBackup(data);
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
       const file = new File(Paths.cache, `petplanner-backup-${stamp}.json`);
@@ -93,7 +108,7 @@ function PengaturanScreen() {
     setBusy(true);
     try {
       const picked = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'text/plain'],
+        type: ['application/json', 'text/plain', 'application/octet-stream'],
         copyToCacheDirectory: true,
       });
       if (picked.canceled) return;
@@ -120,22 +135,39 @@ function PengaturanScreen() {
       const lanjut = await konfirmasiImpor(result.data);
       if (!lanjut) return;
 
+      // Simpan dulu data baru tanpa notificationId. Jika langkah ini gagal,
+      // data dan pengingat lama tetap utuh.
+      await saveAll({
+        pets: result.data.pets,
+        schedules: result.data.schedules,
+        perawatanKustom: result.data.perawatanKustom,
+      });
+
+      // Setelah data tersimpan, baru ganti pengingat. Jadwal di storage sudah
+      // tidak memiliki notificationId, sehingga kegagalan di sini bisa
+      // dipulihkan oleh rescheduleMissing saat aplikasi dibuka berikutnya.
       await cancelAllNotifications();
       const scheduled = await rescheduleMissing(
         result.data.schedules,
         result.data.perawatanKustom
       );
-      await saveAll({
-        pets: result.data.pets,
-        schedules: scheduled.schedules,
-        perawatanKustom: result.data.perawatanKustom,
-      });
+      try {
+        if (scheduled.changed) {
+          await saveAll({ schedules: scheduled.schedules });
+        }
+      } catch (error) {
+        console.warn('Gagal menyimpan ID pengingat hasil impor', error);
+      }
+
       setCounts({
         pets: result.data.pets.length,
         schedules: result.data.schedules.length,
         perawatanKustom: result.data.perawatanKustom.length,
       });
-      Alert.alert('Impor berhasil', 'Data dan pengingat berhasil dipulihkan.');
+      Alert.alert(
+        'Impor berhasil',
+        'Data berhasil dipulihkan. Pengingat akan disinkronkan saat aplikasi dibuka jika belum aktif.'
+      );
     } catch (error) {
       console.warn('Gagal mengimpor data', error);
       Alert.alert('Gagal mengimpor', 'Data backup tidak dapat dipulihkan.');
@@ -156,8 +188,9 @@ function PengaturanScreen() {
           onPress: async () => {
             setBusy(true);
             try {
-              await cancelAllNotifications();
+              // Hapus data dulu; kalau gagal, pengingat lama tidak ikut hilang.
               await clearAll();
+              await cancelAllNotifications();
               setCounts({ pets: 0, schedules: 0, perawatanKustom: 0 });
               Alert.alert('Data dihapus', 'Semua data PetPlanner sudah dihapus.');
             } catch (error) {
@@ -214,9 +247,11 @@ function PengaturanScreen() {
       <Text style={styles.sectionTitle}>Data</Text>
       <View style={styles.card}>
         <View style={styles.countRow}>
-          <Text style={styles.cardBody}>{counts.pets} hewan</Text>
-          <Text style={styles.cardBody}>{counts.schedules} jadwal</Text>
-          <Text style={styles.cardBody}>{counts.perawatanKustom} jenis kustom</Text>
+          <Text style={styles.cardBody}>{loadError ? '—' : counts.pets} hewan</Text>
+          <Text style={styles.cardBody}>{loadError ? '—' : counts.schedules} jadwal</Text>
+          <Text style={styles.cardBody}>
+            {loadError ? '—' : counts.perawatanKustom} jenis kustom
+          </Text>
         </View>
         <Text style={styles.cardBody}>
           Backup disimpan sebagai file JSON. Simpan file tersebut di Google Drive

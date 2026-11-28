@@ -52,12 +52,28 @@ async function savePerawatanKustom(perawatanKustom) {
 }
 
 async function loadAll() {
-  const [pets, schedules, perawatanKustom] = await Promise.all([
+  const results = await Promise.allSettled([
     loadPets(),
     loadSchedules(),
     loadPerawatanKustom(),
   ]);
-  return { pets, schedules, perawatanKustom };
+  const errors = [];
+
+  function valueAt(index, key) {
+    if (results[index].status === 'fulfilled') return results[index].value;
+    errors.push({
+      key,
+      message: results[index].reason?.message || String(results[index].reason),
+    });
+    return [];
+  }
+
+  return {
+    pets: valueAt(0, PETS_KEY),
+    schedules: valueAt(1, SCHEDULES_KEY),
+    perawatanKustom: valueAt(2, PERAWATAN_KUSTOM_KEY),
+    errors,
+  };
 }
 
 async function saveAll({ pets, schedules, perawatanKustom }) {

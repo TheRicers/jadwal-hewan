@@ -76,7 +76,7 @@ function JadwalFormScreen({ navigation, route }) {
       try {
         const data = await loadAll();
         if (!active) return;
-        setLoadError(false);
+        setLoadError(data.errors.length > 0);
         const daftarHewan = data.pets;
         setPets(daftarHewan);
         setPerawatanKustom(data.perawatanKustom);
@@ -393,9 +393,8 @@ function JadwalFormScreen({ navigation, route }) {
             <View
               style={[styles.perawatan, styles.perawatanSelected]}
               accessible
-              accessibilityRole="radio"
+              accessibilityRole="text"
               accessibilityLabel="Jenis perawatan lama: Lainnya"
-              accessibilityState={{ selected: true }}
             >
               <Text style={styles.perawatanIcon}>🐾</Text>
               <Text style={[styles.perawatanText, styles.chipTextSelected]}>Lainnya</Text>

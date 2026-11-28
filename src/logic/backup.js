@@ -17,7 +17,13 @@ function createBackup({ pets, schedules, perawatanKustom }, exportedAt = new Dat
     version: BACKUP_VERSION,
     exportedAt,
     pets,
-    schedules,
+    schedules: schedules.map((schedule) => ({
+      id: schedule.id,
+      petId: schedule.petId,
+      perawatan: schedule.perawatan,
+      jam: schedule.jam,
+      riwayat: Array.isArray(schedule.riwayat) ? [...schedule.riwayat] : [],
+    })),
     perawatanKustom,
   };
 }
@@ -58,6 +64,9 @@ function validateBackup(payload) {
     const perawatan = teks(item.perawatan);
     if (!id || !petId || !perawatan || !isValidJam(item.jam)) {
       return gagal('Data jadwal di backup tidak lengkap atau jamnya tidak valid.');
+    }
+    if (!petIds.has(petId)) {
+      return gagal('Jadwal di backup merujuk hewan yang tidak ada.');
     }
     if (scheduleIds.has(id)) return gagal('ID jadwal di backup duplikat.');
     scheduleIds.add(id);

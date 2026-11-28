@@ -1,5 +1,5 @@
 const React = require('react');
-const { useCallback, useState } = React;
+const { useCallback, useRef, useState } = React;
 const {
   Alert, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable,
   StyleSheet, Text, TextInput, View,
@@ -7,7 +7,7 @@ const {
 const { useFocusEffect } = require('@react-navigation/native');
 
 const {
-  loadAll, savePets, saveSchedules,
+  loadAll, saveAll, savePets,
 } = require('../storage/db');
 const { deletePet } = require('../logic/pets');
 const { newId } = require('../utils/id');
@@ -25,18 +25,29 @@ function HewanScreen() {
   const [nama, setNama] = useState('');
   const [jenis, setJenis] = useState('');
   const [loadError, setLoadError] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const requestRef = useRef(0);
 
   const loadData = useCallback(async () => {
-    setLoadError(false);
+    const request = requestRef.current + 1;
+    requestRef.current = request;
+    setLoaded(false);
     try {
       const data = await loadAll();
+      if (request !== requestRef.current) return;
       setPets(data.pets);
       setSchedules(data.schedules);
+      setLoadError(data.errors.length > 0);
+      setLoaded(true);
     } catch (error) {
+      if (request !== requestRef.current) return;
       console.warn('Gagal memuat data hewan', error);
       setLoadError(true);
+      setLoaded(true);
     }
   }, []);
+
+  const canWrite = loaded && !loadError;
 
   useFocusEffect(
     useCallback(() => {
@@ -59,7 +70,7 @@ function HewanScreen() {
   }
 
   async function handleSave() {
-    if (loadError) {
+    if (!canWrite) {
       Alert.alert('Data belum siap', 'Muat ulang data terlebih dahulu.');
       return;
     }
@@ -103,16 +114,16 @@ function HewanScreen() {
         text: 'Hapus',
         style: 'destructive',
         onPress: async () => {
-          if (loadError) {
+          if (!canWrite) {
             Alert.alert('Data belum siap', 'Muat ulang data terlebih dahulu.');
             return;
           }
           const result = deletePet(pets, schedules, pet.id);
           try {
-            await Promise.all([
-              savePets(result.pets),
-              saveSchedules(result.schedules),
-            ]);
+            await saveAll({
+              pets: result.pets,
+              schedules: result.schedules,
+            });
             setPets(result.pets);
             setSchedules(result.schedules);
             for (const schedule of result.removed) {
@@ -142,23 +153,23 @@ function HewanScreen() {
         </View>
         <Pressable
           onPress={() => openEdit(item)}
-          disabled={loadError}
+          disabled={!canWrite}
           hitSlop={8}
           style={styles.action}
           accessibilityRole="button"
           accessibilityLabel={`Edit ${item.nama}`}
-          accessibilityState={{ disabled: loadError }}
+          accessibilityState={{ disabled: !canWrite }}
         >
           <Text style={styles.actionText}>Ubah</Text>
         </Pressable>
         <Pressable
           onPress={() => handleDelete(item)}
-          disabled={loadError}
+          disabled={!canWrite}
           hitSlop={8}
           style={[styles.action, styles.actionDanger]}
           accessibilityRole="button"
           accessibilityLabel={`Hapus ${item.nama}`}
-          accessibilityState={{ disabled: loadError }}
+          accessibilityState={{ disabled: !canWrite }}
         >
           <Text style={[styles.actionText, styles.actionDangerText]}>Hapus</Text>
         </Pressable>
@@ -183,7 +194,9 @@ function HewanScreen() {
           />
         ) : null}
         ListEmptyComponent={
-          loadError ? null : (
+          loadError ? null : !loaded ? (
+            <Text style={styles.loading}>Memuat hewan…</Text>
+          ) : (
             <View style={styles.empty}>
               <Text style={styles.emptyIcon}>🐶</Text>
               <Text style={styles.emptyTitle}>Belum ada hewan</Text>
@@ -196,12 +209,12 @@ function HewanScreen() {
       />
 
       <Pressable
-        style={[styles.fab, loadError && styles.fabDisabled]}
+        style={[styles.fab, !canWrite && styles.fabDisabled]}
         onPress={openAdd}
-        disabled={loadError}
+        disabled={!canWrite}
         accessibilityRole="button"
         accessibilityLabel="Tambah hewan"
-        accessibilityState={{ disabled: loadError }}
+        accessibilityState={{ disabled: !canWrite }}
       >
         <Text style={styles.fabText}>+</Text>
       </Pressable>
@@ -273,6 +286,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   listContent: { padding: spacing.lg, paddingBottom: 120 },
   listContentEmpty: { flexGrow: 1 },
+  loading: { textAlign: 'center', color: colors.muted, marginTop: spacing.xl },
   card: {
     flexDirection: 'row',
     alignItems: 'center',

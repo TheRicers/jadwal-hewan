@@ -21,7 +21,9 @@ function completionDates(schedules) {
   const dates = new Set();
   for (const schedule of schedules) {
     const riwayat = Array.isArray(schedule.riwayat) ? schedule.riwayat : [];
-    for (const date of riwayat) dates.add(date);
+    for (const date of riwayat) {
+      if (typeof date === 'string') dates.add(date);
+    }
   }
   return dates;
 }
@@ -33,7 +35,8 @@ function monthSummary(schedules, year, monthIndex) {
 
   for (const schedule of schedules) {
     const riwayat = Array.isArray(schedule.riwayat) ? schedule.riwayat : [];
-    for (const date of riwayat) {
+    const unik = new Set(riwayat.filter((date) => typeof date === 'string'));
+    for (const date of unik) {
       if (!date.startsWith(prefix)) continue;
       counts[date] = (counts[date] || 0) + 1;
       total += 1;
@@ -49,7 +52,8 @@ function perPetCounts(schedules, year, monthIndex) {
 
   for (const schedule of schedules) {
     const riwayat = Array.isArray(schedule.riwayat) ? schedule.riwayat : [];
-    for (const date of riwayat) {
+    const unik = new Set(riwayat.filter((date) => typeof date === 'string'));
+    for (const date of unik) {
       if (!date.startsWith(prefix)) continue;
       counts[schedule.petId] = (counts[schedule.petId] || 0) + 1;
     }

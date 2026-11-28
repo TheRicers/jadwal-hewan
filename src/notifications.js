@@ -10,6 +10,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
+async function getNotificationPermission() {
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    return current.granted;
+  } catch (error) {
+    console.warn('Gagal memeriksa izin notifikasi', error);
+    return false;
+  }
+}
+
 async function setupNotifications() {
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
@@ -78,6 +88,7 @@ async function rescheduleMissing(schedules, perawatanKustom = []) {
 }
 
 module.exports = {
+  getNotificationPermission,
   setupNotifications,
   scheduleDaily,
   cancelNotification,
