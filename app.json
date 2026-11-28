@@ -2,7 +2,7 @@
   "expo": {
     "name": "PetPlanner",
     "slug": "petplanner",
-    "version": "1.10.1",
+    "version": "1.10.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     },
     "android": {
       "package": "com.thericers.petplanner",
-      "versionCode": 3,
+      "versionCode": 4,
       "permissions": ["SCHEDULE_EXACT_ALARM"],
       "adaptiveIcon": {
         "backgroundColor": "#2F7D6D",

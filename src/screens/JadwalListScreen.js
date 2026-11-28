@@ -11,7 +11,10 @@ const {
 } = require('../logic/schedules');
 const { resolvePerawatan } = require('../logic/perawatan');
 const { todayKey } = require('../utils/date');
-const { cancelNotification } = require('../notifications');
+const {
+  cancelNotification, getExactAlarmPermission, requestExactAlarmPermission,
+  rescheduleAll,
+} = require('../notifications');
 const { useNotificationStatus } = require('../NotificationStatus');
 const DataErrorBanner = require('../components/DataErrorBanner');
 const { colors, spacing, radius } = require('../theme');
@@ -32,6 +35,7 @@ function JadwalListScreen({ navigation }) {
   const [perawatanKustom, setPerawatanKustom] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [exactAlarmPrompted, setExactAlarmPrompted] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const { granted } = useNotificationStatus();
   const requestRef = useRef(0);
@@ -99,6 +103,77 @@ function JadwalListScreen({ navigation }) {
       ),
     });
   }, [navigation]);
+
+  useEffect(() => {
+    if (
+      exactAlarmPrompted
+      || loadError
+      || granted !== true
+      || schedules.length === 0
+    ) {
+      return undefined;
+    }
+
+    let active = true;
+    getExactAlarmPermission().then((allowed) => {
+      if (!active || allowed) return;
+      setExactAlarmPrompted(true);
+      Alert.alert(
+        'Aktifkan alarm tepat waktu?',
+        'Android dapat menunda pengingat saat layar mati. Izinkan Alarms & reminders agar pengingat PetPlanner berbunyi tepat waktu.',
+        [
+          { text: 'Nanti', style: 'cancel' },
+          {
+            text: 'Izinkan',
+            onPress: async () => {
+              const grantedNow = await requestExactAlarmPermission();
+              if (!grantedNow) {
+                Alert.alert(
+                  'Belum diizinkan',
+                  'Aktifkan Alarms & reminders untuk PetPlanner di pengaturan Android.'
+                );
+                return;
+              }
+              try {
+                const data = await loadAll();
+                if (data.errors.length > 0) {
+                  Alert.alert(
+                    'Data belum lengkap',
+                    'Buka Pengaturan dan muat ulang data sebelum mengaktifkan alarm.'
+                  );
+                  return;
+                }
+                const cleared = data.schedules.map((schedule) => ({
+                  ...schedule,
+                  notificationId: null,
+                }));
+                await saveSchedules(cleared);
+                const result = await rescheduleAll(cleared, data.perawatanKustom);
+                await saveSchedules(result.schedules);
+                setSchedules(result.schedules);
+                Alert.alert(
+                  'Alarm tepat waktu aktif',
+                  'Semua pengingat sudah dijadwalkan ulang sebagai alarm tepat waktu.'
+                );
+              } catch (error) {
+                console.warn('Gagal mengaktifkan alarm tepat waktu', error);
+                Alert.alert(
+                  'Gagal mengaktifkan',
+                  'Coba aktifkan melalui menu Pengaturan.'
+                );
+              }
+            },
+          },
+        ]
+      );
+    }).catch(() => {
+      // Jika pemeriksaan gagal, jangan tampilkan prompt yang mengganggu.
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [exactAlarmPrompted, granted, loadError, schedules.length]);
 
   useEffect(() => {
     const interval = setInterval(() => {
