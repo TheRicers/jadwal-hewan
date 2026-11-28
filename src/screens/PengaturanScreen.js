@@ -13,7 +13,8 @@ const {
 } = require('../storage/db');
 const { createBackup, validateBackup } = require('../logic/backup');
 const {
-  cancelAllNotifications, rescheduleMissing,
+  cancelAllNotifications, getExactAlarmPermission, requestExactAlarmPermission,
+  rescheduleAll, rescheduleMissing,
 } = require('../notifications');
 const { useNotificationStatus } = require('../NotificationStatus');
 const DataErrorBanner = require('../components/DataErrorBanner');
@@ -39,6 +40,7 @@ function konfirmasiImpor(data) {
 function PengaturanScreen() {
   const [counts, setCounts] = useState({ pets: 0, schedules: 0, perawatanKustom: 0 });
   const [loadError, setLoadError] = useState(false);
+  const [exactAlarmGranted, setExactAlarmGranted] = useState(null);
   const [busy, setBusy] = useState(false);
   const { granted } = useNotificationStatus();
   const requestRef = useRef(0);
@@ -55,6 +57,9 @@ function PengaturanScreen() {
         perawatanKustom: data.perawatanKustom.length,
       });
       setLoadError(data.errors.length > 0);
+      const exact = await getExactAlarmPermission();
+      if (request !== requestRef.current) return;
+      setExactAlarmGranted(exact);
     } catch (error) {
       if (request !== requestRef.current) return;
       console.warn('Gagal memuat data pengaturan', error);
@@ -211,6 +216,42 @@ function PengaturanScreen() {
     });
   }
 
+  async function handleExactAlarm() {
+    setBusy(true);
+    try {
+      const granted = await requestExactAlarmPermission();
+      setExactAlarmGranted(granted);
+      if (!granted) {
+        Alert.alert(
+          'Alarm tepat waktu belum aktif',
+          'Aktifkan Alarms & reminders untuk PetPlanner di pengaturan Android.'
+        );
+        return;
+      }
+
+      const data = await loadAll();
+      // Kosongkan ID lama dulu agar kegagalan di tengah proses bisa dipulihkan
+      // oleh rescheduleMissing saat aplikasi dibuka kembali.
+      await saveAll({
+        schedules: data.schedules.map((schedule) => ({
+          ...schedule,
+          notificationId: null,
+        })),
+      });
+      const result = await rescheduleAll(data.schedules, data.perawatanKustom);
+      await saveAll({ schedules: result.schedules });
+      Alert.alert(
+        'Alarm tepat waktu aktif',
+        'Semua pengingat sudah dijadwalkan ulang agar lebih tepat waktu.'
+      );
+    } catch (error) {
+      console.warn('Gagal mengaktifkan alarm tepat waktu', error);
+      Alert.alert('Gagal mengaktifkan', 'Pengaturan alarm tepat waktu tidak dapat dibuka.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {loadError ? (
@@ -242,6 +283,32 @@ function PengaturanScreen() {
         >
           <Text style={styles.secondaryButtonText}>Buka Pengaturan Android</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
+          {exactAlarmGranted === null
+            ? 'Memeriksa alarm tepat waktu…'
+            : exactAlarmGranted
+              ? 'Alarm tepat waktu aktif'
+              : 'Alarm tepat waktu belum aktif'}
+        </Text>
+        <Text style={styles.cardBody}>
+          {exactAlarmGranted
+            ? 'Pengingat dijadwalkan sebagai alarm sehingga tidak mudah ditunda oleh sistem.'
+            : 'Tanpa izin Alarms & reminders, Android dapat menunda pengingat sampai layar dinyalakan.'}
+        </Text>
+        {exactAlarmGranted === false ? (
+          <Pressable
+            style={[styles.secondaryButton, busy && styles.disabled]}
+            onPress={handleExactAlarm}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Izinkan alarm tepat waktu"
+          >
+            <Text style={styles.secondaryButtonText}>Izinkan Alarm Tepat Waktu</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <Text style={styles.sectionTitle}>Data</Text>

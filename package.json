@@ -1,6 +1,6 @@
 {
   "name": "petplanner",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "main": "index.js",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

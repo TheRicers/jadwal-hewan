@@ -1,4 +1,5 @@
 const Notifications = require('expo-notifications');
+const { Platform } = require('react-native');
 const { bodyNotifikasiPerawatan } = require('./logic/perawatan');
 
 Notifications.setNotificationHandler({
@@ -29,8 +30,38 @@ async function setupNotifications() {
   return requested.granted;
 }
 
+async function getExactAlarmPermission() {
+  if (Platform.OS !== 'android') return true;
+  try {
+    const response = await Notifications.getExactAlarmPermissionsAsync();
+    return response.granted;
+  } catch (error) {
+    console.warn('Gagal memeriksa izin alarm tepat waktu', error);
+    return false;
+  }
+}
+
+async function requestExactAlarmPermission() {
+  if (Platform.OS !== 'android') return true;
+  try {
+    const response = await Notifications.requestExactAlarmPermissionsAsync();
+    return response.granted;
+  } catch (error) {
+    console.warn('Gagal meminta izin alarm tepat waktu', error);
+    return false;
+  }
+}
+
 async function scheduleDaily(schedule, perawatanKustom = []) {
   const [hour, minute] = schedule.jam.split(':').map(Number);
+  const trigger = {
+    type: Notifications.SchedulableTriggerInputTypes.DAILY,
+    hour,
+    minute,
+  };
+  if (Platform.OS === 'android') {
+    trigger.delivery = 'alarmClock';
+  }
   try {
     return await Notifications.scheduleNotificationAsync({
       content: {
@@ -39,11 +70,7 @@ async function scheduleDaily(schedule, perawatanKustom = []) {
         sound: 'default',
         data: { scheduleId: schedule.id },
       },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour,
-        minute,
-      },
+      trigger,
     });
   } catch (error) {
     console.warn('Gagal menjadwalkan notifikasi', error);
@@ -66,6 +93,14 @@ async function cancelAllNotifications() {
   } catch (error) {
     console.warn('Gagal membatalkan semua notifikasi', error);
   }
+}
+
+async function rescheduleAll(schedules, perawatanKustom = []) {
+  await cancelAllNotifications();
+  return rescheduleMissing(
+    schedules.map((schedule) => ({ ...schedule, notificationId: null })),
+    perawatanKustom
+  );
 }
 
 async function rescheduleMissing(schedules, perawatanKustom = []) {
@@ -110,9 +145,12 @@ async function rescheduleMissing(schedules, perawatanKustom = []) {
 
 module.exports = {
   getNotificationPermission,
+  getExactAlarmPermission,
+  requestExactAlarmPermission,
   setupNotifications,
   scheduleDaily,
   cancelNotification,
   cancelAllNotifications,
+  rescheduleAll,
   rescheduleMissing,
 };
