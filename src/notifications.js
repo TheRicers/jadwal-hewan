@@ -52,7 +52,15 @@ async function requestExactAlarmPermission() {
   }
 }
 
-async function scheduleDaily(schedule, perawatanKustom = []) {
+let notificationQueue = Promise.resolve();
+
+function enqueueNotificationTask(task) {
+  const run = notificationQueue.then(task, task);
+  notificationQueue = run.catch(() => {});
+  return run;
+}
+
+async function scheduleDailyInternal(schedule, perawatanKustom = []) {
   const [hour, minute] = schedule.jam.split(':').map(Number);
   const trigger = {
     type: Notifications.SchedulableTriggerInputTypes.DAILY,
@@ -78,6 +86,12 @@ async function scheduleDaily(schedule, perawatanKustom = []) {
   }
 }
 
+function scheduleDaily(schedule, perawatanKustom = []) {
+  return enqueueNotificationTask(
+    () => scheduleDailyInternal(schedule, perawatanKustom)
+  );
+}
+
 async function cancelNotification(notificationId) {
   if (!notificationId) return;
   try {
@@ -95,24 +109,49 @@ async function cancelAllNotifications() {
   }
 }
 
-async function rescheduleAll(schedules, perawatanKustom = []) {
-  await cancelAllNotifications();
-  return rescheduleMissing(
-    schedules.map((schedule) => ({ ...schedule, notificationId: null })),
-    perawatanKustom
+function rescheduleAll(schedules, perawatanKustom = []) {
+  return enqueueNotificationTask(async () => {
+    await cancelAllNotifications();
+    return rescheduleMissingInternal(
+      schedules.map((schedule) => ({ ...schedule, notificationId: null })),
+      perawatanKustom
+    );
+  });
+}
+
+function rescheduleMissing(schedules, perawatanKustom = []) {
+  return enqueueNotificationTask(
+    () => rescheduleMissingInternal(schedules, perawatanKustom)
   );
 }
 
-async function rescheduleMissing(schedules, perawatanKustom = []) {
+async function rescheduleMissingInternal(schedules, perawatanKustom = []) {
   // Bersihkan notifikasi yang tidak lagi dimiliki jadwal mana pun dan
   // sinkronkan ID yang tersimpan dengan notifikasi yang benar-benar aktif.
   let scheduledIds = null;
+  const scheduledByScheduleId = new Map();
   try {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
     scheduledIds = new Set(scheduled.map((notification) => notification.identifier));
+    const scheduleIds = new Set(schedules.map((schedule) => schedule.id));
     const activeIds = new Set(
       schedules.map((schedule) => schedule.notificationId).filter(Boolean)
     );
+
+    // Pertahankan satu notifikasi per jadwal meskipun notificationId di
+    // storage hilang atau basi (misalnya setelah impor/reschedule).
+    for (const notification of scheduled) {
+      const scheduleId = notification.content?.data?.scheduleId;
+      if (
+        scheduleId
+        && scheduleIds.has(scheduleId)
+        && !scheduledByScheduleId.has(scheduleId)
+      ) {
+        scheduledByScheduleId.set(scheduleId, notification.identifier);
+        activeIds.add(notification.identifier);
+      }
+    }
+
     for (const notification of scheduled) {
       if (!activeIds.has(notification.identifier)) {
         await cancelNotification(notification.identifier);
@@ -132,7 +171,15 @@ async function rescheduleMissing(schedules, perawatanKustom = []) {
       next.push(schedule);
       continue;
     }
-    const notificationId = await scheduleDaily(schedule, perawatanKustom);
+    if (scheduledByScheduleId.has(schedule.id)) {
+      next.push({
+        ...schedule,
+        notificationId: scheduledByScheduleId.get(schedule.id),
+      });
+      changed = true;
+      continue;
+    }
+    const notificationId = await scheduleDailyInternal(schedule, perawatanKustom);
     if (!notificationId) {
       next.push(schedule);
       continue;
